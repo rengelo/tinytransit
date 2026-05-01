@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Tiny Transit</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app">
+      <section class="topbar" aria-label="Game status">
+        <div class="topbar-brand" aria-label="Tiny Transit">
+          <svg class="brand-mark" viewBox="0 0 72 48" aria-hidden="true">
+            <path d="M9 32H27C33 32 35 26 39 22C43 18 47 18 52 18H63" fill="none" stroke="#0d9fb3" stroke-linecap="round" stroke-linejoin="round" stroke-width="6"/>
+            <path d="M10 32H27C33 32 35 26 39 22C43 18 47 18 52 18H63" fill="none" stroke="rgba(255,255,255,0.7)" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+            <circle cx="11" cy="32" r="7" fill="#f4ecda" stroke="#202124" stroke-width="3"/>
+            <rect x="31" y="14" width="14" height="14" rx="2" fill="#f4ecda" stroke="#202124" stroke-width="3"/>
+            <path d="M57 10L64 24H50Z" fill="#f4ecda" stroke="#202124" stroke-linejoin="round" stroke-width="3"/>
+            <rect x="20" y="25" width="9" height="7" rx="2.5" fill="#d8a21b" stroke="#202124" stroke-width="2"/>
+          </svg>
+          <div class="brand-copy">
+            <strong>Tiny Transit</strong>
+            <span>Keep the city moving</span>
+          </div>
+        </div>
+        <div class="hud" aria-live="polite">
+          <div class="stats">
+            <span><strong id="day">Day 1</strong></span>
+            <span>Cash <strong id="cash">$0</strong></span>
+            <span>Trips <strong id="trips">0</strong></span>
+            <span>Score <strong id="score">0</strong></span>
+            <span>Stress <strong id="stress">0%</strong></span>
+          </div>
+          <div class="day-progress" aria-hidden="true">
+            <div class="day-progress-fill" id="dayProgressFill"></div>
+          </div>
+          <div class="hud-toast hidden" id="hudToast" aria-live="polite"></div>
+        </div>
+        <button id="musicToggleBtn" class="music-toggle" type="button" aria-pressed="true">Music On</button>
+      </section>
+
+      <section class="toolbar" aria-label="Route controls">
+        <div class="toolbar-primary">
+          <div class="speed-picker" id="speedPicker" aria-label="Game speed"></div>
+          <button id="pauseBtn" type="button">Pause</button>
+          <button id="restartBtn" type="button">Restart</button>
+        </div>
+        <div class="toolbar-actions">
+          <span class="toolbar-label">Shop</span>
+          <button id="buyBridgeBtn" type="button">Bridge $80</button>
+          <button id="buyCarriageBtn" type="button">Carriage $200</button>
+          <button id="buyEngineBtn" type="button">Engine $240</button>
+          <button id="buyLineBtn" type="button">Line $300</button>
+        </div>
+      </section>
+
+      <section class="playfield" aria-label="Tiny Transit game board">
+        <canvas id="gameCanvas"></canvas>
+        <div class="inventory">
+          <button class="inventory-btn" id="inventoryBridgeBtn" type="button">Bridge <strong id="bridgeCount">0</strong></button>
+          <button class="inventory-btn" id="inventoryCarriageBtn" type="button">Carriage (C) <strong id="carriageCount">0</strong></button>
+          <button class="inventory-btn" id="inventoryEngineBtn" type="button">Engine (E) <strong id="engineCount">0</strong></button>
+          <button class="inventory-btn" id="inventoryLineBtn" type="button">Line (L) <strong id="lineCount">0</strong></button>
+        </div>
+        <div class="start-modal" id="startModal" role="dialog" aria-modal="true" aria-labelledby="startTitle">
+          <div class="start-card">
+            <div class="start-brand" aria-hidden="true">
+              <svg class="start-mark" viewBox="0 0 72 48">
+                <path d="M9 32H27C33 32 35 26 39 22C43 18 47 18 52 18H63" fill="none" stroke="#0d9fb3" stroke-linecap="round" stroke-linejoin="round" stroke-width="6"/>
+                <path d="M10 32H27C33 32 35 26 39 22C43 18 47 18 52 18H63" fill="none" stroke="rgba(255,255,255,0.7)" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+                <circle cx="11" cy="32" r="7" fill="#f4ecda" stroke="#202124" stroke-width="3"/>
+                <rect x="31" y="14" width="14" height="14" rx="2" fill="#f4ecda" stroke="#202124" stroke-width="3"/>
+                <path d="M57 10L64 24H50Z" fill="#f4ecda" stroke="#202124" stroke-linejoin="round" stroke-width="3"/>
+                <rect x="20" y="25" width="9" height="7" rx="2.5" fill="#d8a21b" stroke="#202124" stroke-width="2"/>
+              </svg>
+              <div class="start-copy">
+                <p class="eyebrow">Tiny Transit</p>
+                <h2 id="startTitle">Keep the city moving</h2>
+              </div>
+            </div>
+            <label class="field" for="playerNameInput">
+              <span>Your name</span>
+              <input id="playerNameInput" type="text" maxlength="24" autocomplete="nickname" placeholder="Dispatcher name">
+            </label>
+            <p class="field-hint" id="playerNameHint">Choose a name for the leaderboard.</p>
+            <section class="leaderboard-panel" aria-labelledby="startLeaderboardTitle">
+              <div class="leaderboard-head">
+                <h3 id="startLeaderboardTitle">Leaderboard</h3>
+                <span class="leaderboard-status" id="leaderboardStatus">Offline</span>
+              </div>
+              <div class="leaderboard-list" id="leaderboardList"></div>
+            </section>
+            <button id="startBtn" type="button">Start</button>
+          </div>
+        </div>
+        <div class="results-modal hidden" id="resultsModal" role="dialog" aria-modal="true" aria-labelledby="resultsTitle">
+          <div class="results-card">
+            <p class="eyebrow">Gridlock report</p>
+            <h2 id="resultsTitle">City gridlocked</h2>
+            <div class="results-stats">
+              <span>Score <strong id="resultScore">0</strong></span>
+              <span>Passengers <strong id="resultPassengers">0</strong></span>
+              <span>Total revenue <strong id="resultRevenue">$0</strong></span>
+              <span>Days operated <strong id="resultDays">0</strong></span>
+            </div>
+            <div class="share-actions" aria-label="Share result">
+              <button class="share-btn" data-platform="facebook" type="button">Facebook</button>
+              <button class="share-btn" data-platform="instagram" type="button">Instagram</button>
+              <button class="share-btn" data-platform="whatsapp" type="button">Whatsapp</button>
+              <button class="share-btn" data-platform="reddit" type="button">Reddit</button>
+            </div>
+            <section class="leaderboard-panel leaderboard-panel-results" aria-labelledby="resultsLeaderboardTitle">
+              <div class="leaderboard-head">
+                <h3 id="resultsLeaderboardTitle">Top dispatchers</h3>
+                <span class="leaderboard-status" id="resultsLeaderboardStatus">Offline</span>
+              </div>
+              <div class="leaderboard-list" id="resultsLeaderboardList"></div>
+            </section>
+            <button id="resultsRestartBtn" type="button">Restart city</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <audio id="bgMusic" src="Pixel Sunday.mp3" preload="auto" loop></audio>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
+    <script src="game.js"></script>
+  </body>
+</html>
