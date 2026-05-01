@@ -128,7 +128,7 @@ const DAY_START_HOUR = 7;
 const NIGHT_START_PROGRESS = 0.617;
 const MAX_NIGHT_DIM = 0.575;
 const LEADERBOARD_TABLE = "leaderboard_entries";
-const LEADERBOARD_LIMIT = 20;
+const LEADERBOARD_LIMIT = 10;
 const PLAYER_NAME_MAX = 24;
 const PLAYER_NAME_STORAGE_KEY = "tinytransit.playerName";
 const MUSIC_ENABLED_STORAGE_KEY = "tinytransit.musicEnabled";
@@ -776,15 +776,13 @@ function setLeaderboardStatus(message) {
 }
 
 function renderLeaderboard() {
-  const topEntries = leaderboardEntries.slice(0, LEADERBOARD_LIMIT);
-  renderLeaderboardList(ui.leaderboardList, topEntries);
-  renderLeaderboardList(ui.resultsLeaderboardList, topEntries, { showCurrentPlayer: true, compact: true });
+  renderLeaderboardList(ui.leaderboardList, leaderboardEntries);
+  renderLeaderboardList(ui.resultsLeaderboardList, leaderboardEntries);
 }
 
-function renderLeaderboardList(container, entries, options = {}) {
+function renderLeaderboardList(container, entries) {
   if (!container) return;
   container.innerHTML = "";
-  container.classList.toggle("compact", !!options.compact);
   if (!entries.length) {
     const empty = document.createElement("p");
     empty.className = "leaderboard-empty";
@@ -796,58 +794,32 @@ function renderLeaderboardList(container, entries, options = {}) {
   }
 
   entries.forEach((entry, index) => {
-    container.appendChild(createLeaderboardRow(entry, index + 1, options));
-  });
-
-  if (options.showCurrentPlayer && state?.playerName) {
-    const playerRank = findPlayerLeaderboardRank(state.playerName);
-    if (playerRank && playerRank.rank > entries.length) {
-      const divider = document.createElement("div");
-      divider.className = "leaderboard-divider";
-      divider.textContent = "Your position";
-      container.appendChild(divider);
-      container.appendChild(createLeaderboardRow(playerRank.entry, playerRank.rank, options));
+    const row = document.createElement("div");
+    row.className = "leaderboard-row";
+    if (state?.playerName && sanitizePlayerName(entry.player_name) === state.playerName) {
+      row.classList.add("current-player");
     }
-  }
-}
 
-function createLeaderboardRow(entry, rankValue, options = {}) {
-  const row = document.createElement("div");
-  row.className = `leaderboard-row${options.compact ? " compact" : ""}`;
-  if (state?.playerName && sanitizePlayerName(entry.player_name) === state.playerName) {
-    row.classList.add("current-player");
-  }
+    const rank = document.createElement("span");
+    rank.className = "leaderboard-rank";
+    rank.textContent = `#${index + 1}`;
 
-  const rank = document.createElement("span");
-  rank.className = "leaderboard-rank";
-  rank.textContent = `#${rankValue}`;
+    const identity = document.createElement("div");
+    const name = document.createElement("div");
+    name.className = "leaderboard-name";
+    name.textContent = entry.player_name;
+    const meta = document.createElement("div");
+    meta.className = "leaderboard-meta";
+    meta.textContent = `${entry.days_operated}d · ${entry.passengers} pax · $${entry.revenue}`;
+    identity.append(name, meta);
 
-  const identity = document.createElement("div");
-  const name = document.createElement("div");
-  name.className = "leaderboard-name";
-  name.textContent = entry.player_name;
-  const meta = document.createElement("div");
-  meta.className = "leaderboard-meta";
-  meta.textContent = `${entry.days_operated}d · ${entry.passengers} pax · $${entry.revenue}`;
-  identity.append(name, meta);
+    const score = document.createElement("span");
+    score.className = "leaderboard-score";
+    score.textContent = entry.score;
 
-  const score = document.createElement("span");
-  score.className = "leaderboard-score";
-  score.textContent = entry.score;
-
-  row.append(rank, identity, score);
-  return row;
-}
-
-function findPlayerLeaderboardRank(playerName) {
-  const clean = sanitizePlayerName(playerName);
-  if (!clean || !leaderboardEntries.length) return null;
-  const index = leaderboardEntries.findIndex((entry) => sanitizePlayerName(entry.player_name) === clean);
-  if (index < 0) return null;
-  return {
-    rank: index + 1,
-    entry: leaderboardEntries[index],
-  }
+    row.append(rank, identity, score);
+    container.appendChild(row);
+  });
 }
 
 function initLeaderboard() {
@@ -885,7 +857,8 @@ async function refreshLeaderboard() {
     .order("score", { ascending: false })
     .order("passengers", { ascending: false })
     .order("revenue", { ascending: false })
-    .order("days_operated", { ascending: false });
+    .order("days_operated", { ascending: false })
+    .limit(LEADERBOARD_LIMIT);
 
   if (error) {
     leaderboardReady = false;
@@ -1226,10 +1199,21 @@ function trackPathBetweenStations(from, to, variant = 0) {
 
 function trackPathBetweenTerrainPoints(a, b, mapOffsets = state?.map || { west: 0, north: 0, south: 0 }, variant = 0) {
   const rect = canvas.getBoundingClientRect();
-  const worldA = terrainPointToWorld(a.x, a.y, rect, mapOffsets);
-  const worldB = terrainPointToWorld(b.x, b.y, rect, mapOffsets);
+  const width = rect.width || canvas.width || 1;
+  const height = rect.height || canvas.height || 1;
+  const west = mapOffsets.west || 0;
+  const north = mapOffsets.north || 0;
+  const worldA = {
+    x: (a.x + west) * width,
+    y: (a.y + north) * height,
+  };
+  const worldB = {
+    x: (b.x + west) * width,
+    y: (b.y + north) * height,
+  };
   return generateTrackPath(worldA, worldB, variant).map((point) => ({
-    ...screenWorldToTerrain(point.x, point.y, rect, mapOffsets),
+    x: point.x / width - west,
+    y: point.y / height - north,
   }));
 }
 
@@ -1462,44 +1446,16 @@ function projectPointToPolyline(point, points) {
 }
 
 function terrainToScreen(x, y) {
-  const rect = canvas.getBoundingClientRect();
-  const metrics = terrainMetrics(rect);
   return {
-    x: (metrics.offsetX + (x + metrics.west) * metrics.scale) / metrics.width,
-    y: (metrics.offsetY + (y + metrics.north) * metrics.scale) / metrics.height,
+    x: x + state.map.west,
+    y: y + state.map.north,
   };
 }
 
-function screenWorldToTerrain(x, y, rect = canvas.getBoundingClientRect(), mapOffsets = state?.map || { west: 0, north: 0, south: 0 }) {
-  const metrics = terrainMetrics(rect, mapOffsets);
+function screenWorldToTerrain(x, y) {
   return {
-    x: (x - metrics.offsetX) / metrics.scale - metrics.west,
-    y: (y - metrics.offsetY) / metrics.scale - metrics.north,
-  };
-}
-
-function terrainMetrics(rect = canvas.getBoundingClientRect(), mapOffsets = state?.map || { west: 0, north: 0, south: 0 }) {
-  const width = rect.width || canvas.clientWidth || 1;
-  const height = rect.height || canvas.clientHeight || 1;
-  const west = mapOffsets.west || 0;
-  const north = mapOffsets.north || 0;
-  const south = mapOffsets.south || 0;
-  const mapW = 1 + west;
-  const mapH = 1 + north + south;
-  const scale = Math.min(width / mapW, height / mapH);
-  const contentWidth = mapW * scale;
-  const contentHeight = mapH * scale;
-  return {
-    width,
-    height,
-    west,
-    north,
-    south,
-    scale,
-    contentWidth,
-    contentHeight,
-    offsetX: (width - contentWidth) / 2,
-    offsetY: (height - contentHeight) / 2,
+    x: x / canvas.getBoundingClientRect().width - state.map.west,
+    y: y / canvas.getBoundingClientRect().height - state.map.north,
   };
 }
 
@@ -1520,13 +1476,10 @@ function screenToWorld(x, y) {
 
 function clampCamera() {
   const rect = canvas.getBoundingClientRect();
-  const metrics = terrainMetrics(rect);
-  const minX = rect.width - (metrics.offsetX + metrics.contentWidth) * camera.zoom;
-  const maxX = -metrics.offsetX * camera.zoom;
-  const minY = rect.height - (metrics.offsetY + metrics.contentHeight) * camera.zoom;
-  const maxY = -metrics.offsetY * camera.zoom;
-  camera.x = Math.min(maxX, Math.max(minX, camera.x));
-  camera.y = Math.min(maxY, Math.max(minY, camera.y));
+  const scaledWidth = rect.width * mapWidth() * camera.zoom;
+  const scaledHeight = rect.height * mapHeight() * camera.zoom;
+  camera.x = Math.min(0, Math.max(rect.width - scaledWidth, camera.x));
+  camera.y = Math.min(0, Math.max(rect.height - scaledHeight, camera.y));
 }
 
 function fitCameraToMap() {
@@ -1537,7 +1490,7 @@ function fitCameraToMap() {
 }
 
 function minCameraZoom() {
-  return 1;
+  return Math.min(1 / mapWidth(), 1 / mapHeight());
 }
 
 function getStationAt(clientX, clientY) {
@@ -2490,13 +2443,12 @@ function startPlaneArrival(airport) {
   if (!airport || state.planeArrivals.some((arrival) => arrival.airportId === airport.id)) return;
   const airportPoint = stationPosition(airport);
   const rect = canvas.getBoundingClientRect();
-  const metrics = terrainMetrics(rect);
   state.planeArrivals.push({
     airportId: airport.id,
     progress: 0,
     duration: AIRPORT_APPROACH_DURATION,
     dropSize: randomInt(AIRPORT_DROP_MIN, AIRPORT_DROP_MAX),
-    startX: metrics.offsetX + metrics.contentWidth + 80,
+    startX: rect.width * mapWidth() + 80,
     startY: airportPoint.y - randomBetween(90, 150),
   });
 }
@@ -2537,13 +2489,12 @@ function startShipArrival(port) {
   if (!port || state.shipArrivals.some((arrival) => arrival.portId === port.id)) return;
   const berth = portBerthGeometry(port);
   const rect = canvas.getBoundingClientRect();
-  const metrics = terrainMetrics(rect);
   state.shipArrivals.push({
     portId: port.id,
     progress: 0,
     duration: PORT_APPROACH_DURATION,
     dropSize: randomInt(PORT_DROP_MIN, PORT_DROP_MAX),
-    startX: Math.max(metrics.offsetX + metrics.contentWidth + 120, berth.berthX + 150),
+    startX: Math.max(rect.width * mapWidth() + 120, berth.berthX + 150),
     startY: berth.berthY + randomBetween(-18, 18),
   });
 }
@@ -3455,10 +3406,14 @@ function portBerthGeometry(port, rect = canvas.getBoundingClientRect()) {
 
 function snapTerrainPointToGrid(x, y, mapOffsets = state?.map || { west: 0, north: 0, south: 0 }) {
   const rect = canvas.getBoundingClientRect();
-  const metrics = terrainMetrics(rect, mapOffsets);
+  const width = rect.width || canvas.width || 1;
+  const height = rect.height || canvas.height || 1;
+  const west = mapOffsets.west || 0;
+  const north = mapOffsets.north || 0;
+  const south = mapOffsets.south || 0;
   return {
-    x: Math.max(-metrics.west, Math.min(1, (snapPixel(metrics.offsetX + (x + metrics.west) * metrics.scale) - metrics.offsetX) / metrics.scale - metrics.west)),
-    y: Math.max(-metrics.north, Math.min(1 + metrics.south, (snapPixel(metrics.offsetY + (y + metrics.north) * metrics.scale) - metrics.offsetY) / metrics.scale - metrics.north)),
+    x: Math.max(-west, Math.min(1, snapPixel((x + west) * width) / width - west)),
+    y: Math.max(-north, Math.min(1 + south, snapPixel((y + north) * height) / height - north)),
   };
 }
 
