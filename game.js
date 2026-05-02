@@ -338,6 +338,7 @@ function startGame() {
   renderLeaderboard();
   state.started = true;
   ui.startModal.classList.add("hidden");
+  updateButtons();
   syncMusicPlayback();
 }
 
@@ -1224,11 +1225,7 @@ function trainCompartments(train) {
 
 function stationPosition(station) {
   const rect = canvas.getBoundingClientRect();
-  const screen = terrainToScreen(station.x, station.y);
-  return {
-    x: screen.x * rect.width,
-    y: screen.y * rect.height,
-  };
+  return terrainPointToWorld(station.x, station.y, rect);
 }
 
 function stationTrackPosition(station) {
@@ -1263,21 +1260,10 @@ function trackPathBetweenStations(from, to, variant = 0) {
 
 function trackPathBetweenTerrainPoints(a, b, mapOffsets = state?.map || { west: 0, north: 0, south: 0 }, variant = 0) {
   const rect = canvas.getBoundingClientRect();
-  const width = rect.width || canvas.width || 1;
-  const height = rect.height || canvas.height || 1;
-  const west = mapOffsets.west || 0;
-  const north = mapOffsets.north || 0;
-  const worldA = {
-    x: (a.x + west) * width,
-    y: (a.y + north) * height,
-  };
-  const worldB = {
-    x: (b.x + west) * width,
-    y: (b.y + north) * height,
-  };
+  const worldA = terrainPointToWorldForOffsets(a.x, a.y, mapOffsets, rect);
+  const worldB = terrainPointToWorldForOffsets(b.x, b.y, mapOffsets, rect);
   return generateTrackPath(worldA, worldB, variant).map((point) => ({
-    x: point.x / width - west,
-    y: point.y / height - north,
+    ...worldPointToTerrainForOffsets(point, mapOffsets, rect),
   }));
 }
 
@@ -1510,16 +1496,18 @@ function projectPointToPolyline(point, points) {
 }
 
 function terrainToScreen(x, y) {
+  const metrics = mapViewportMetrics();
   return {
-    x: x + state.map.west,
-    y: y + state.map.north,
+    x: (x + metrics.west) * metrics.scaleX,
+    y: (y + metrics.north) * metrics.scaleY,
   };
 }
 
 function screenWorldToTerrain(x, y) {
+  const metrics = mapViewportMetrics();
   return {
-    x: x / canvas.getBoundingClientRect().width - state.map.west,
-    y: y / canvas.getBoundingClientRect().height - state.map.north,
+    x: x / metrics.scaleX - metrics.west,
+    y: y / metrics.scaleY - metrics.north,
   };
 }
 
@@ -1531,19 +1519,88 @@ function mapHeight() {
   return 1 + state.map.north + state.map.south;
 }
 
-function screenToWorld(x, y) {
+function useStableMobileMap() {
+  return true;
+}
+
+function mapViewportMetrics(rect = canvas.getBoundingClientRect(), mapOffsets = state?.map || { west: 0, north: 0, south: 0 }) {
+  const width = rect.width || canvas.width || 1;
+  const height = rect.height || canvas.height || 1;
+  const west = mapOffsets.west || 0;
+  const north = mapOffsets.north || 0;
+  const south = mapOffsets.south || 0;
+  const terrainWidth = 1 + west;
+  const terrainHeight = 1 + north + south;
+
+  if (!useStableMobileMap()) {
+    return {
+      width,
+      height,
+      west,
+      north,
+      south,
+      scaleX: width,
+      scaleY: height,
+      offsetX: 0,
+      offsetY: 0,
+      worldWidth: terrainWidth * width,
+      worldHeight: terrainHeight * height,
+    };
+  }
+
+  const scale = Math.min(width / terrainWidth, height / terrainHeight);
   return {
-    x: (x - camera.x) / camera.zoom,
-    y: (y - camera.y) / camera.zoom,
+    width,
+    height,
+    west,
+    north,
+    south,
+    scaleX: scale,
+    scaleY: scale,
+    offsetX: (width - terrainWidth * scale) / 2,
+    offsetY: (height - terrainHeight * scale) / 2,
+    worldWidth: terrainWidth * scale,
+    worldHeight: terrainHeight * scale,
+  };
+}
+
+function screenToWorld(x, y) {
+  const metrics = mapViewportMetrics();
+  return {
+    x: (x - metrics.offsetX - camera.x) / camera.zoom,
+    y: (y - metrics.offsetY - camera.y) / camera.zoom,
   };
 }
 
 function clampCamera() {
   const rect = canvas.getBoundingClientRect();
-  const scaledWidth = rect.width * mapWidth() * camera.zoom;
-  const scaledHeight = rect.height * mapHeight() * camera.zoom;
-  camera.x = Math.min(0, Math.max(rect.width - scaledWidth, camera.x));
-  camera.y = Math.min(0, Math.max(rect.height - scaledHeight, camera.y));
+  const metrics = mapViewportMetrics(rect);
+  const scaledWidth = metrics.worldWidth * camera.zoom;
+  const scaledHeight = metrics.worldHeight * camera.zoom;
+  const minZoom = minCameraZoom();
+  const allowSlackPan = camera.zoom > minZoom + 0.001;
+
+  if (scaledWidth <= rect.width) {
+    if (allowSlackPan) {
+      const slack = (rect.width - scaledWidth) / 2;
+      camera.x = Math.max(-slack, Math.min(slack, camera.x));
+    } else {
+      camera.x = 0;
+    }
+  } else {
+    camera.x = Math.min(-metrics.offsetX, Math.max(rect.width - metrics.offsetX - scaledWidth, camera.x));
+  }
+
+  if (scaledHeight <= rect.height) {
+    if (allowSlackPan) {
+      const slack = (rect.height - scaledHeight) / 2;
+      camera.y = Math.max(-slack, Math.min(slack, camera.y));
+    } else {
+      camera.y = 0;
+    }
+  } else {
+    camera.y = Math.min(-metrics.offsetY, Math.max(rect.height - metrics.offsetY - scaledHeight, camera.y));
+  }
 }
 
 function fitCameraToMap() {
@@ -1554,15 +1611,18 @@ function fitCameraToMap() {
 }
 
 function minCameraZoom() {
-  return Math.min(1 / mapWidth(), 1 / mapHeight());
+  const rect = canvas.getBoundingClientRect();
+  const metrics = mapViewportMetrics(rect);
+  return Math.min(rect.width / metrics.worldWidth, rect.height / metrics.worldHeight);
 }
 
 function zoomCameraAtScreenPoint(screenX, screenY, nextZoom, anchorWorld = null) {
+  const metrics = mapViewportMetrics();
   const zoom = Math.max(minCameraZoom(), Math.min(MAX_CAMERA_ZOOM, nextZoom));
   const anchor = anchorWorld || screenToWorld(screenX, screenY);
   camera.zoom = zoom;
-  camera.x = screenX - anchor.x * camera.zoom;
-  camera.y = screenY - anchor.y * camera.zoom;
+  camera.x = screenX - metrics.offsetX - anchor.x * camera.zoom;
+  camera.y = screenY - metrics.offsetY - anchor.y * camera.zoom;
   clampCamera();
 }
 
@@ -1645,8 +1705,8 @@ function getStationAt(clientX, clientY) {
 }
 
 function stationHitRadius() {
-  const rect = canvas.getBoundingClientRect();
-  return 34 / camera.zoom / Math.min(rect.width, rect.height);
+  const metrics = mapViewportMetrics();
+  return 34 / camera.zoom / metrics.scaleX;
 }
 
 function clientToWorld(clientX, clientY) {
@@ -2362,11 +2422,7 @@ function routeSegmentWaterKindForPath(path) {
 }
 
 function worldPointToTerrain(point) {
-  const rect = canvas.getBoundingClientRect();
-  return {
-    x: point.x / rect.width - state.map.west,
-    y: point.y / rect.height - state.map.north,
-  };
+  return worldPointToTerrainForOffsets(point);
 }
 
 function placeBridgeForSegment(fromId, toId) {
@@ -2621,12 +2677,13 @@ function startPlaneArrival(airport) {
   if (!airport || state.planeArrivals.some((arrival) => arrival.airportId === airport.id)) return;
   const airportPoint = stationPosition(airport);
   const rect = canvas.getBoundingClientRect();
+  const metrics = mapViewportMetrics(rect);
   state.planeArrivals.push({
     airportId: airport.id,
     progress: 0,
     duration: AIRPORT_APPROACH_DURATION,
     dropSize: randomInt(AIRPORT_DROP_MIN, AIRPORT_DROP_MAX),
-    startX: rect.width * mapWidth() + 80,
+    startX: metrics.worldWidth + 80,
     startY: airportPoint.y - randomBetween(90, 150),
   });
 }
@@ -2667,12 +2724,13 @@ function startShipArrival(port) {
   if (!port || state.shipArrivals.some((arrival) => arrival.portId === port.id)) return;
   const berth = portBerthGeometry(port);
   const rect = canvas.getBoundingClientRect();
+  const metrics = mapViewportMetrics(rect);
   state.shipArrivals.push({
     portId: port.id,
     progress: 0,
     duration: PORT_APPROACH_DURATION,
     dropSize: randomInt(PORT_DROP_MIN, PORT_DROP_MAX),
-    startX: Math.max(rect.width * mapWidth() + 120, berth.berthX + 150),
+    startX: Math.max(metrics.worldWidth + 120, berth.berthX + 150),
     startY: berth.berthY + randomBetween(-18, 18),
   });
 }
@@ -3333,11 +3391,13 @@ function showResults() {
 
 function draw() {
   const rect = canvas.getBoundingClientRect();
+  const metrics = mapViewportMetrics(rect);
   ctx.clearRect(0, 0, rect.width, rect.height);
   ctx.fillStyle = "#e6dcc7";
   ctx.fillRect(0, 0, rect.width, rect.height);
+  drawViewportWaterGutter(rect, metrics);
   ctx.save();
-  ctx.translate(camera.x, camera.y);
+  ctx.translate(metrics.offsetX + camera.x, metrics.offsetY + camera.y);
   ctx.scale(camera.zoom, camera.zoom);
   drawWater(rect);
   drawLines();
@@ -3354,10 +3414,19 @@ function draw() {
   if (state.paused && !state.selectedItem) drawOverlay(rect);
 }
 
+function drawViewportWaterGutter(rect, metrics) {
+  if (!state.coastline || metrics.offsetX <= 0) return;
+  const gutterStart = metrics.offsetX + metrics.worldWidth;
+  if (gutterStart >= rect.width) return;
+  ctx.fillStyle = SEA_COLOR;
+  ctx.fillRect(gutterStart, 0, rect.width - gutterStart, rect.height);
+}
+
 function drawWater(rect) {
   const coast = state.coastline;
+  const metrics = mapViewportMetrics(rect);
   ctx.fillStyle = "#e6dcc7";
-  ctx.fillRect(0, 0, rect.width * mapWidth(), rect.height * mapHeight());
+  ctx.fillRect(0, 0, metrics.worldWidth, metrics.worldHeight);
   if (coast) {
     const topY = -state.map.north;
     const bottomY = 1 + state.map.south;
@@ -3395,8 +3464,9 @@ function drawWater(rect) {
 function drawNightMapShade(rect) {
   const intensity = nightIntensity();
   if (intensity <= 0) return;
+  const metrics = mapViewportMetrics(rect);
   ctx.fillStyle = `rgba(20, 28, 44, ${MAX_NIGHT_DIM * intensity})`;
-  ctx.fillRect(0, 0, rect.width * mapWidth(), rect.height * mapHeight());
+  ctx.fillRect(0, 0, metrics.worldWidth, metrics.worldHeight);
 }
 
 function drawInlandWaterCells(rect) {
@@ -3409,8 +3479,9 @@ function drawInlandWaterCells(rect) {
 }
 
 function drawGrid(rect) {
-  const width = rect.width * mapWidth();
-  const height = rect.height * mapHeight();
+  const metrics = mapViewportMetrics(rect);
+  const width = metrics.worldWidth;
+  const height = metrics.worldHeight;
   ctx.strokeStyle = "#e4e8ef";
   ctx.lineWidth = 1;
   for (let x = 0; x <= width; x += GRID_SIZE) {
@@ -3558,10 +3629,22 @@ function cellKey(col, row) {
 }
 
 function terrainPointToWorld(x, y, rect) {
-  const screen = terrainToScreen(x, y);
+  return terrainPointToWorldForOffsets(x, y, state?.map || { west: 0, north: 0, south: 0 }, rect);
+}
+
+function terrainPointToWorldForOffsets(x, y, mapOffsets = state?.map || { west: 0, north: 0, south: 0 }, rect = canvas.getBoundingClientRect()) {
+  const metrics = mapViewportMetrics(rect, mapOffsets);
   return {
-    x: screen.x * rect.width,
-    y: screen.y * rect.height,
+    x: (x + metrics.west) * metrics.scaleX,
+    y: (y + metrics.north) * metrics.scaleY,
+  };
+}
+
+function worldPointToTerrainForOffsets(point, mapOffsets = state?.map || { west: 0, north: 0, south: 0 }, rect = canvas.getBoundingClientRect()) {
+  const metrics = mapViewportMetrics(rect, mapOffsets);
+  return {
+    x: point.x / metrics.scaleX - metrics.west,
+    y: point.y / metrics.scaleY - metrics.north,
   };
 }
 
@@ -3583,15 +3666,12 @@ function portBerthGeometry(port, rect = canvas.getBoundingClientRect()) {
 }
 
 function snapTerrainPointToGrid(x, y, mapOffsets = state?.map || { west: 0, north: 0, south: 0 }) {
-  const rect = canvas.getBoundingClientRect();
-  const width = rect.width || canvas.width || 1;
-  const height = rect.height || canvas.height || 1;
   const west = mapOffsets.west || 0;
   const north = mapOffsets.north || 0;
   const south = mapOffsets.south || 0;
   return {
-    x: Math.max(-west, Math.min(1, snapPixel((x + west) * width) / width - west)),
-    y: Math.max(-north, Math.min(1 + south, snapPixel((y + north) * height) / height - north)),
+    x: Math.max(-west, Math.min(1, Math.round(x / WATER_GRID) * WATER_GRID)),
+    y: Math.max(-north, Math.min(1 + south, Math.round(y / WATER_GRID) * WATER_GRID)),
   };
 }
 
