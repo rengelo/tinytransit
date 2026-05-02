@@ -88,6 +88,7 @@ const STRESS_WARNING_LOAD = 0.4;
 const STRESS_RISE_RATE = 8;
 const STRESS_FALL_RATE = 4;
 const TRAIN_SPEED = 145;
+const MAX_CAMERA_ZOOM = 2.8;
 const SHARP_TURN_ANGLE = Math.PI / 2;
 const SHORE_MARGIN = 0.035;
 const STATION_LAND_RADIUS = 0.045;
@@ -153,6 +154,8 @@ let speedMultiplier = 1;
 let routeDrag = null;
 let trainDrag = null;
 let panDrag = null;
+let touchGesture = null;
+let activeTouchPoints = new Map();
 let disconnectMenu = null;
 let supabaseClient = null;
 let leaderboardReady = false;
@@ -160,6 +163,10 @@ let leaderboardEntries = [];
 let musicEnabled = loadStoredMusicEnabled();
 let hudToastTimer = null;
 let shopPausedGame = false;
+
+function isTouchPointer(event) {
+  return event.pointerType === "touch";
+}
 
 function loadStoredMusicEnabled() {
   try {
@@ -1036,6 +1043,14 @@ function nightLightIntensity() {
   return Math.min(1, t * t * t);
 }
 
+function updateViewportMetrics() {
+  const viewport = window.visualViewport;
+  const height = viewport?.height || window.innerHeight || document.documentElement.clientHeight || 0;
+  const top = viewport?.offsetTop || 0;
+  document.documentElement.style.setProperty("--viewport-height", `${Math.round(height)}px`);
+  document.documentElement.style.setProperty("--viewport-top", `${Math.round(top)}px`);
+}
+
 function resizeCanvas() {
   const rect = canvas.getBoundingClientRect();
   const dpr = Math.max(1, window.devicePixelRatio || 1);
@@ -1542,6 +1557,85 @@ function minCameraZoom() {
   return Math.min(1 / mapWidth(), 1 / mapHeight());
 }
 
+function zoomCameraAtScreenPoint(screenX, screenY, nextZoom, anchorWorld = null) {
+  const zoom = Math.max(minCameraZoom(), Math.min(MAX_CAMERA_ZOOM, nextZoom));
+  const anchor = anchorWorld || screenToWorld(screenX, screenY);
+  camera.zoom = zoom;
+  camera.x = screenX - anchor.x * camera.zoom;
+  camera.y = screenY - anchor.y * camera.zoom;
+  clampCamera();
+}
+
+function clearActiveCanvasDrags() {
+  routeDrag = null;
+  trainDrag = null;
+  panDrag = null;
+}
+
+function activeTouchList() {
+  return Array.from(activeTouchPoints.values()).slice(0, 2);
+}
+
+function setActiveTouchPoint(event) {
+  activeTouchPoints.set(event.pointerId, {
+    clientX: event.clientX,
+    clientY: event.clientY,
+  });
+}
+
+function removeActiveTouchPoint(event) {
+  activeTouchPoints.delete(event.pointerId);
+}
+
+function beginTouchGesture() {
+  const points = activeTouchList();
+  if (points.length < 2) {
+    touchGesture = null;
+    return false;
+  }
+  const rect = canvas.getBoundingClientRect();
+  const centerX = (points[0].clientX + points[1].clientX) / 2 - rect.left;
+  const centerY = (points[0].clientY + points[1].clientY) / 2 - rect.top;
+  const anchor = screenToWorld(centerX, centerY);
+  touchGesture = {
+    anchorWorldX: anchor.x,
+    anchorWorldY: anchor.y,
+    startDistance: Math.max(24, Math.hypot(
+      points[1].clientX - points[0].clientX,
+      points[1].clientY - points[0].clientY
+    )),
+    startZoom: camera.zoom,
+  };
+  return true;
+}
+
+function resetTouchGesture() {
+  touchGesture = null;
+}
+
+function updateTouchGesture() {
+  if (!touchGesture && !beginTouchGesture()) return false;
+  const points = activeTouchList();
+  if (points.length < 2) {
+    resetTouchGesture();
+    return false;
+  }
+  const rect = canvas.getBoundingClientRect();
+  const centerX = (points[0].clientX + points[1].clientX) / 2 - rect.left;
+  const centerY = (points[0].clientY + points[1].clientY) / 2 - rect.top;
+  const distance = Math.max(24, Math.hypot(
+    points[1].clientX - points[0].clientX,
+    points[1].clientY - points[0].clientY
+  ));
+  const targetZoom = touchGesture.startZoom * (distance / touchGesture.startDistance);
+  zoomCameraAtScreenPoint(centerX, centerY, targetZoom, {
+    x: touchGesture.anchorWorldX,
+    y: touchGesture.anchorWorldY,
+  });
+  pointer.stationId = null;
+  return true;
+}
+
 function getStationAt(clientX, clientY) {
   const world = clientToWorld(clientX, clientY);
   const terrain = screenWorldToTerrain(world.x, world.y);
@@ -1800,13 +1894,33 @@ function handleWheel(event) {
   const before = screenToWorld(mouseX, mouseY);
   const direction = event.deltaY < 0 ? 1 : -1;
   const factor = direction > 0 ? 1.14 : 1 / 1.14;
-  camera.zoom = Math.max(minCameraZoom(), Math.min(2.8, camera.zoom * factor));
-  camera.x = mouseX - before.x * camera.zoom;
-  camera.y = mouseY - before.y * camera.zoom;
-  clampCamera();
+  zoomCameraAtScreenPoint(mouseX, mouseY, camera.zoom * factor, before);
+}
+
+function handleCanvasPointerMove(event) {
+  if (isTouchPointer(event) && activeTouchPoints.has(event.pointerId)) {
+    setActiveTouchPoint(event);
+    if (touchGesture || activeTouchPoints.size >= 2) {
+      event.preventDefault();
+      updateTouchGesture();
+      return;
+    }
+  }
+  updatePointer(event);
 }
 
 function handleCanvasPointerDown(event) {
+  if (isTouchPointer(event)) {
+    setActiveTouchPoint(event);
+    if (canvas.setPointerCapture) {
+      canvas.setPointerCapture(event.pointerId);
+    }
+    if (activeTouchPoints.size >= 2) {
+      clearActiveCanvasDrags();
+      beginTouchGesture();
+      return;
+    }
+  }
   if (!state.started) return;
   if (state.gameOver) {
     resetGame();
@@ -1943,6 +2057,21 @@ function handleCanvasPointerDown(event) {
 }
 
 function handleCanvasPointerUp(event) {
+  if (isTouchPointer(event)) {
+    const wasGesture = !!touchGesture;
+    removeActiveTouchPoint(event);
+    if (wasGesture) {
+      if (activeTouchPoints.size >= 2) {
+        beginTouchGesture();
+      } else {
+        resetTouchGesture();
+      }
+      if (canvas.hasPointerCapture && canvas.hasPointerCapture(event.pointerId)) {
+        canvas.releasePointerCapture(event.pointerId);
+      }
+      return;
+    }
+  }
   if (panDrag) {
     updatePointer(event);
     const station = panDrag.stationId !== null ? state.stations[panDrag.stationId] : null;
@@ -4571,12 +4700,19 @@ canvas.addEventListener("pointerdown", (event) => {
   event.preventDefault();
   handleCanvasPointerDown(event);
 });
-canvas.addEventListener("pointermove", updatePointer);
+canvas.addEventListener("pointermove", handleCanvasPointerMove);
 canvas.addEventListener("pointerup", handleCanvasPointerUp);
-canvas.addEventListener("pointercancel", () => {
-  routeDrag = null;
-  trainDrag = null;
-  panDrag = null;
+canvas.addEventListener("pointercancel", (event) => {
+  if (isTouchPointer(event)) {
+    removeActiveTouchPoint(event);
+  }
+  if (activeTouchPoints.size < 2) {
+    resetTouchGesture();
+  }
+  clearActiveCanvasDrags();
+  if (canvas.hasPointerCapture && canvas.hasPointerCapture(event.pointerId)) {
+    canvas.releasePointerCapture(event.pointerId);
+  }
 });
 canvas.addEventListener("pointerleave", () => {
   if (routeDrag || trainDrag || panDrag) return;
@@ -4587,12 +4723,23 @@ canvas.addEventListener("contextmenu", (event) => {
 });
 canvas.addEventListener("wheel", handleWheel, { passive: false });
 window.addEventListener("resize", () => {
+  updateViewportMetrics();
   resizeCanvas();
+  draw();
+});
+window.visualViewport?.addEventListener("resize", () => {
+  updateViewportMetrics();
+  resizeCanvas();
+  draw();
+});
+window.visualViewport?.addEventListener("scroll", () => {
+  updateViewportMetrics();
   draw();
 });
 
 initLeaderboard();
 resetGame();
+updateViewportMetrics();
 resizeCanvas();
 requestAnimationFrame(loop);
 
