@@ -98,6 +98,7 @@ const SEA_COLOR = "#dceff2";
 const INLAND_WATER_COLOR = "#86c9d8";
 const WATER_GRID = 0.08;
 const GRID_SIZE = 64;
+const WORLD_SCALE = GRID_SIZE / WATER_GRID;
 const WATER_RADIUS = 12;
 const INLAND_WATER_RATIO_MIN = 0.035;
 const INLAND_WATER_RATIO_MAX = 0.21;
@@ -1531,36 +1532,28 @@ function mapViewportMetrics(rect = canvas.getBoundingClientRect(), mapOffsets = 
   const south = mapOffsets.south || 0;
   const terrainWidth = 1 + west;
   const terrainHeight = 1 + north + south;
-
-  if (!useStableMobileMap()) {
-    return {
-      width,
-      height,
-      west,
-      north,
-      south,
-      scaleX: width,
-      scaleY: height,
-      offsetX: 0,
-      offsetY: 0,
-      worldWidth: terrainWidth * width,
-      worldHeight: terrainHeight * height,
-    };
-  }
-
-  const scale = Math.min(width / terrainWidth, height / terrainHeight);
+  const worldWidth = terrainWidth * WORLD_SCALE;
+  const worldHeight = terrainHeight * WORLD_SCALE;
+  const fitZoom = Math.min(width / worldWidth, height / worldHeight);
+  const zoom = camera?.zoom && Number.isFinite(camera.zoom) ? camera.zoom : fitZoom;
+  const scaledWorldWidth = worldWidth * zoom;
+  const scaledWorldHeight = worldHeight * zoom;
   return {
     width,
     height,
     west,
     north,
     south,
-    scaleX: scale,
-    scaleY: scale,
-    offsetX: (width - terrainWidth * scale) / 2,
-    offsetY: (height - terrainHeight * scale) / 2,
-    worldWidth: terrainWidth * scale,
-    worldHeight: terrainHeight * scale,
+    scaleX: WORLD_SCALE,
+    scaleY: WORLD_SCALE,
+    fitZoom,
+    zoom,
+    offsetX: scaledWorldWidth < width ? (width - scaledWorldWidth) / 2 : 0,
+    offsetY: scaledWorldHeight < height ? (height - scaledWorldHeight) / 2 : 0,
+    worldWidth,
+    worldHeight,
+    scaledWorldWidth,
+    scaledWorldHeight,
   };
 }
 
@@ -1575,8 +1568,8 @@ function screenToWorld(x, y) {
 function clampCamera() {
   const rect = canvas.getBoundingClientRect();
   const metrics = mapViewportMetrics(rect);
-  const scaledWidth = metrics.worldWidth * camera.zoom;
-  const scaledHeight = metrics.worldHeight * camera.zoom;
+  const scaledWidth = metrics.scaledWorldWidth;
+  const scaledHeight = metrics.scaledWorldHeight;
   const minZoom = minCameraZoom();
   const allowSlackPan = camera.zoom > minZoom + 0.001;
 
@@ -1588,7 +1581,7 @@ function clampCamera() {
       camera.x = 0;
     }
   } else {
-    camera.x = Math.min(-metrics.offsetX, Math.max(rect.width - metrics.offsetX - scaledWidth, camera.x));
+    camera.x = Math.min(0, Math.max(rect.width - scaledWidth, camera.x));
   }
 
   if (scaledHeight <= rect.height) {
@@ -1599,7 +1592,7 @@ function clampCamera() {
       camera.y = 0;
     }
   } else {
-    camera.y = Math.min(-metrics.offsetY, Math.max(rect.height - metrics.offsetY - scaledHeight, camera.y));
+    camera.y = Math.min(0, Math.max(rect.height - scaledHeight, camera.y));
   }
 }
 
@@ -1613,14 +1606,14 @@ function fitCameraToMap() {
 function minCameraZoom() {
   const rect = canvas.getBoundingClientRect();
   const metrics = mapViewportMetrics(rect);
-  return Math.min(rect.width / metrics.worldWidth, rect.height / metrics.worldHeight);
+  return metrics.fitZoom;
 }
 
 function zoomCameraAtScreenPoint(screenX, screenY, nextZoom, anchorWorld = null) {
-  const metrics = mapViewportMetrics();
   const zoom = Math.max(minCameraZoom(), Math.min(MAX_CAMERA_ZOOM, nextZoom));
   const anchor = anchorWorld || screenToWorld(screenX, screenY);
   camera.zoom = zoom;
+  const metrics = mapViewportMetrics();
   camera.x = screenX - metrics.offsetX - anchor.x * camera.zoom;
   camera.y = screenY - metrics.offsetY - anchor.y * camera.zoom;
   clampCamera();
@@ -3415,8 +3408,8 @@ function draw() {
 }
 
 function drawViewportWaterGutter(rect, metrics) {
-  if (!state.coastline || metrics.offsetX <= 0) return;
-  const gutterStart = metrics.offsetX + metrics.worldWidth;
+  if (!state.coastline) return;
+  const gutterStart = metrics.offsetX + camera.x + metrics.scaledWorldWidth;
   if (gutterStart >= rect.width) return;
   ctx.fillStyle = SEA_COLOR;
   ctx.fillRect(gutterStart, 0, rect.width - gutterStart, rect.height);
