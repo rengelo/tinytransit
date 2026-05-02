@@ -659,25 +659,352 @@ h1 {
   margin-bottom: 12px;
 }
 
-@media (max-width: 760px) {
-  .app {
-    grid-template-rows: minmax(0, 1fr);
-  }
-
+@media (pointer: coarse) and (max-width: 960px) {
   .topbar {
-    align-items: flex-start;
-    flex-direction: column;
+    padding: calc(env(safe-area-inset-top, 0px) + 8px) 10px 0;
   }
 
   .hud {
+    gap: 6px;
+    margin: 0;
+    max-width: none;
+  }
+
+  .stats {
+    gap: 6px;
+    justify-content: center;
+  }
+
+  .stats span {
+    font-size: 0.82rem;
+    padding: 6px 8px;
+  }
+
+  .hud-toast {
+    font-size: 0.8rem;
+    max-width: min(360px, calc(100vw - 20px));
+    padding: 6px 10px;
+  }
+
+  .side-controls {
+    gap: 6px;
+  }
+
+  .side-controls-left {
+    left: 10px;
+  }
+
+  .side-controls-right {
+    right: 10px;
+  }
+
+  .control-btn {
+    height: 46px;
+    min-height: 46px;
+    width: 46px;
+  }
+
+  .speed-btn {
+    font-size: 0.9rem;
+    height: 42px;
+    min-height: 42px;
+    min-width: 48px;
+    padding: 0 10px;
+    width: auto;
+  }
+
+  .inventory-btn {
+    height: 50px;
+    min-height: 50px;
+    width: 50px;
+  }
+
+  .btn-icon {
+    height: 20px;
+    width: 20px;
+  }
+
+  .start-modal,
+  .results-modal,
+  .shop-modal {
+    padding: 12px;
+  }
+
+  .start-card,
+  .results-card,
+  .shop-card {
+    max-height: calc(100vh - 24px);
+    max-width: min(460px, calc(100vw - 24px));
+    padding: 16px;
+  }
+
+  .start-mark {
+    height: 56px;
+    width: 84px;
+  }
+
+  .start-copy .eyebrow {
+    font-size: clamp(1.05rem, 4vw, 1.45rem);
+    margin-bottom: 6px;
+  }
+
+  .start-copy h2 {
+    font-size: clamp(0.9rem, 3vw, 1.1rem);
+  }
+
+  .leaderboard-panel {
+    padding: 10px;
+  }
+
+  .leaderboard-list {
+    max-height: min(220px, 26vh);
+  }
+
+  .share-actions,
+  .shop-items {
+    gap: 10px;
+  }
+
+  .shop-item-btn {
+    height: 70px;
+    min-height: 70px;
+    width: 70px;
+  }
+
+  .shop-item-btn .btn-icon {
+    height: 24px;
+    width: 24px;
+  }
+
+  .modal-action-btn,
+  .share-btn {
+    height: 50px;
+    min-height: 50px;
+    width: 50px;
+  }
+
+  .start-action-btn {
+    height: 58px;
+    min-height: 58px;
+    width: 58px;
+  }
+}
+
+@media (pointer: coarse) and (max-width: 960px) and (orientation: landscape) {
+  .topbar {
+    padding: calc(env(safe-area-inset-top, 0px) + 6px) 8px 0;
+  }
+
+  .hud {
+    gap: 4px;
+  }
+
+  .stats {
+    gap: 4px;
+  }
+
+  .stats span {
+    font-size: 0.74rem;
+    padding: 4px 6px;
+  }
+
+  .side-controls {
+    gap: 4px;
+    top: 10px;
+  }
+
+  .side-controls-left {
+    left: 8px;
+  }
+
+  .side-controls-right {
+    right: 8px;
+  }
+
+  .control-btn {
+    height: 38px;
+    min-height: 38px;
+    width: 38px;
+  }
+
+  .speed-btn {
+    font-size: 0.78rem;
+    height: 34px;
+    min-height: 34px;
+    min-width: 38px;
+    padding: 0 6px;
+  }
+
+  .inventory {
+    bottom: 10px;
+    gap: 4px;
+    right: 8px;
+  }
+
+  .inventory-btn {
+    height: 40px;
+    min-height: 40px;
+    width: 40px;
+  }
+
+  .btn-icon {
+    height: 16px;
+    width: 16px;
+  }
+
+  .btn-badge,
+  .btn-hotkey,
+  .shop-price {
+    font-size: 0.6rem;
+    min-width: 14px;
+    padding: 2px 4px;
+  }
+
+  .start-card,
+  .results-card,
+  .shop-card {
+    max-height: calc(100vh - 20px);
+    max-width: min(720px, calc(100vw - 20px));
+    padding: 14px;
+  }
+
+  .start-card {
+    align-items: start;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+    grid-template-areas:
+      "brand leaderboard"
+      "field leaderboard"
+      "hint leaderboard"
+      "start leaderboard";
+    justify-items: stretch;
+    text-align: left;
+  }
+
+  .start-brand {
+    gap: 8px;
+    grid-area: brand;
+    justify-items: start;
+  }
+
+  .field {
+    grid-area: field;
+  }
+
+  .field-hint {
+    grid-area: hint;
+  }
+
+  .start-card .leaderboard-panel {
+    align-self: stretch;
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-area: leaderboard;
+    height: 100%;
+  }
+
+  .start-card .leaderboard-list {
+    align-content: start;
+    max-height: none;
+  }
+
+  .start-card #startBtn {
+    grid-area: start;
+    justify-self: start;
+  }
+
+  .results-card {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+    grid-template-areas:
+      "eyebrow leaderboard"
+      "title leaderboard"
+      "stats leaderboard"
+      "shares leaderboard"
+      "restart leaderboard";
+  }
+
+  .results-card .eyebrow {
+    grid-area: eyebrow;
+  }
+
+  .results-card h2 {
+    grid-area: title;
     margin: 0;
   }
 
+  .results-stats {
+    grid-area: stats;
+    margin-bottom: 0;
+  }
+
+  .share-actions {
+    grid-area: shares;
+    margin-bottom: 0;
+  }
+
+  .leaderboard-panel-results {
+    align-self: stretch;
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-area: leaderboard;
+    height: 100%;
+    margin-bottom: 0;
+  }
+
+  .leaderboard-panel-results .leaderboard-list {
+    align-content: start;
+    max-height: none;
+  }
+
+  .results-card #resultsRestartBtn {
+    grid-area: restart;
+    justify-self: start;
+  }
+
+  .shop-card {
+    align-items: start;
+    grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+    grid-template-areas: "head items";
+  }
+
+  .shop-head {
+    grid-area: head;
+  }
+
+  .shop-items {
+    grid-area: items;
+  }
+}
+
+@media (pointer: coarse) and (max-width: 960px) and (orientation: portrait) {
   .topbar {
-    justify-content: flex-start;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 6px);
+  }
+
+  .side-controls {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+    flex-direction: row;
+    top: auto;
+  }
+
+  .speed-picker-vertical {
+    flex-direction: row;
   }
 
   .stats {
     justify-content: flex-start;
+  }
+
+  .side-controls-left,
+  .side-controls-right {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+  }
+
+  .inventory {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 60px);
+    flex-direction: row;
+    gap: 6px;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
   }
 }
