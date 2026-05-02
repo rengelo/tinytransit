@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="icon-pause" viewBox="0 0 64 64">
+    <rect x="18" y="15" width="10" height="34" rx="3" fill="currentColor"/>
+    <rect x="36" y="15" width="10" height="34" rx="3" fill="currentColor"/>
+  </symbol>
+  <symbol id="icon-play" viewBox="0 0 64 64">
+    <path d="M22 16L48 32L22 48Z" fill="currentColor"/>
+  </symbol>
+  <symbol id="icon-restart" viewBox="0 0 64 64">
+    <path d="M20 24V13L8 25L20 37V26C23 19 30 15 37 16C45 17 51 24 51 32C51 41 44 48 35 48C29 48 24 45 20 40" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="5"/>
+  </symbol>
+  <symbol id="icon-shop" viewBox="0 0 64 64">
+    <path d="M16 24H48L46 49H18Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="5"/>
+    <path d="M24 24C24 18 27 14 32 14C37 14 40 18 40 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="5"/>
+  </symbol>
+  <symbol id="icon-music" viewBox="0 0 64 64">
+    <path d="M22 17V43" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="5"/>
+    <path d="M22 18L45 13V38" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="5"/>
+    <circle cx="19" cy="47" r="7" fill="currentColor"/>
+    <circle cx="42" cy="42" r="7" fill="currentColor"/>
+  </symbol>
+  <symbol id="icon-muted" viewBox="0 0 64 64">
+    <path d="M18 27H28L39 18V46L28 37H18Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="5"/>
+    <path d="M45 24L54 40" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="5"/>
+    <path d="M54 24L45 40" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="5"/>
+  </symbol>
+  <symbol id="icon-close" viewBox="0 0 64 64">
+    <path d="M20 20L44 44" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="5"/>
+    <path d="M44 20L20 44" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="5"/>
+  </symbol>
+  <symbol id="icon-speed-half" viewBox="0 0 64 64">
+    <path d="M15 40C18 27 28 19 40 19" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="5"/>
+    <path d="M27 25L41 32L27 39Z" fill="currentColor"/>
+    <rect x="15" y="44" width="22" height="5" rx="2.5" fill="currentColor" opacity="0.6"/>
+  </symbol>
+  <symbol id="icon-speed-1" viewBox="0 0 64 64">
+    <path d="M15 40C18 27 28 19 40 19" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="5"/>
+    <path d="M24 22L42 32L24 42Z" fill="currentColor"/>
+  </symbol>
+  <symbol id="icon-speed-2" viewBox="0 0 64 64">
+    <path d="M12 40C15 27 25 19 37 19" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="5"/>
+    <path d="M18 22L32 32L18 42Z" fill="currentColor"/>
+    <path d="M32 22L46 32L32 42Z" fill="currentColor"/>
+  </symbol>
+  <symbol id="icon-speed-4" viewBox="0 0 64 64">
+    <path d="M10 40C13 27 23 19 35 19" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="5"/>
+    <path d="M14 22L25 32L14 42Z" fill="currentColor"/>
+    <path d="M24 22L35 32L24 42Z" fill="currentColor"/>
+    <path d="M34 22L45 32L34 42Z" fill="currentColor"/>
+    <circle cx="50" cy="32" r="4" fill="currentColor"/>
+  </symbol>
+  <symbol id="icon-bridge" viewBox="0 0 64 64">
+    <rect x="10" y="16" width="44" height="8" fill="currentColor"/>
+    <path d="M12 48C18 40 24 35 32 35C40 35 46 40 52 48" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="6"/>
+    <path d="M14 24V40" fill="none" stroke="currentColor" stroke-width="4.5"/>
+    <path d="M22 24V35" fill="none" stroke="currentColor" stroke-width="4.5"/>
+    <path d="M30 24V33" fill="none" stroke="currentColor" stroke-width="4.5"/>
+    <path d="M38 24V33" fill="none" stroke="currentColor" stroke-width="4.5"/>
+    <path d="M46 24V35" fill="none" stroke="currentColor" stroke-width="4.5"/>
+    <path d="M54 24V40" fill="none" stroke="currentColor" stroke-width="4.5"/>
+  </symbol>
+  <symbol id="icon-carriage" viewBox="0 0 64 64">
+    <rect x="13" y="20" width="38" height="20" rx="6" fill="none" stroke="currentColor" stroke-width="5"/>
+    <path d="M21 20V15H43V20" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="5"/>
+    <circle cx="22" cy="45" r="4" fill="currentColor"/>
+    <circle cx="42" cy="45" r="4" fill="currentColor"/>
+    <path d="M24 28H40" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="4"/>
+  </symbol>
+  <symbol id="icon-engine" viewBox="0 0 64 64">
+    <path d="M24 10C24 8.9 24.9 8 26 8H38C39.1 8 40 8.9 40 10V12H45C46.7 12 48 13.3 48 15C48 16.7 46.7 18 45 18H19C17.3 18 16 16.7 16 15C16 13.3 17.3 12 19 12H24V10Z" fill="currentColor"/>
+    <path d="M18 20C18 15.6 21.6 12 26 12H38C42.4 12 46 15.6 46 20V41C46 45.4 42.4 49 38 49H26C21.6 49 18 45.4 18 41V20Z" fill="currentColor"/>
+    <rect x="23" y="23" width="18" height="11" rx="2" fill="#f4ecda"/>
+    <circle cx="25" cy="41" r="3.5" fill="#f4ecda"/>
+    <circle cx="39" cy="41" r="3.5" fill="#f4ecda"/>
+    <path d="M23 50L17 60" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="4.5"/>
+    <path d="M41 50L47 60" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="4.5"/>
+    <path d="M18 56H46" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="4.5"/>
+  </symbol>
+  <symbol id="icon-line" viewBox="0 0 64 64">
+    <path d="M13 44H24C30 44 32 34 37 29C42 24 46 24 51 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="5"/>
+    <circle cx="13" cy="44" r="5" fill="none" stroke="currentColor" stroke-width="4"/>
+    <rect x="24" y="15" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="4"/>
+    <path d="M48 17L54 28H42Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="4"/>
+  </symbol>
+  <symbol id="icon-facebook" viewBox="0 0 64 64">
+    <path d="M36 19H43V10H36C28 10 23 15 23 24V31H16V40H23V54H33V40H41L43 31H33V25C33 21 34 19 36 19Z" fill="currentColor"/>
+  </symbol>
+  <symbol id="icon-instagram" viewBox="0 0 64 64">
+    <rect x="14" y="14" width="36" height="36" rx="10" fill="none" stroke="currentColor" stroke-width="5"/>
+    <circle cx="32" cy="32" r="9" fill="none" stroke="currentColor" stroke-width="5"/>
+    <circle cx="43.5" cy="20.5" r="3.5" fill="currentColor"/>
+  </symbol>
+  <symbol id="icon-whatsapp" viewBox="0 0 64 64">
+    <path d="M32 12C20 12 11 21 11 32C11 36 12 40 15 45L12 54L22 51C25 52 28 53 32 53C44 53 53 44 53 32C53 21 44 12 32 12Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="5"/>
+    <path d="M25 25C25 34 31 39 39 40L42 35C39 35 35 33 33 30C30 28 29 25 29 22Z" fill="currentColor"/>
+  </symbol>
+  <symbol id="icon-reddit" viewBox="0 0 64 64">
+    <circle cx="24" cy="33" r="4" fill="currentColor"/>
+    <circle cx="40" cy="33" r="4" fill="currentColor"/>
+    <path d="M22 40C25 43 30 44 32 44C34 44 39 43 42 40" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="4"/>
+    <ellipse cx="32" cy="34" rx="18" ry="12" fill="none" stroke="currentColor" stroke-width="5"/>
+    <circle cx="47" cy="26" r="4" fill="none" stroke="currentColor" stroke-width="4"/>
+    <path d="M26 21L29 15L38 17" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="4"/>
+    <path d="M41 24C43 23 45 23 47 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="4"/>
+  </symbol>
+</svg>

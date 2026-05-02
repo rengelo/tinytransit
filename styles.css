@@ -46,57 +46,85 @@ button.active {
   box-shadow: inset 0 0 0 1px var(--black);
 }
 
+.icon-btn {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+  position: relative;
+}
+
+.btn-icon {
+  display: block;
+  fill: currentColor;
+  height: 24px;
+  width: 24px;
+}
+
+.control-btn,
+.share-btn,
+.modal-action-btn,
+.modal-close-btn {
+  border-radius: 999px;
+  height: 54px;
+  min-height: 54px;
+  padding: 0;
+  width: 54px;
+}
+
+.start-action-btn {
+  height: 64px;
+  min-height: 64px;
+  width: 64px;
+}
+
+.btn-badge,
+.btn-hotkey,
+.shop-price {
+  align-items: center;
+  background: rgba(244, 236, 218, 0.96);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  box-shadow: 0 6px 14px rgba(32, 33, 36, 0.12);
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 800;
+  justify-content: center;
+  line-height: 1;
+  min-width: 18px;
+  padding: 3px 6px;
+  position: absolute;
+}
+
+.btn-badge {
+  bottom: -4px;
+  right: -4px;
+}
+
+.btn-hotkey {
+  left: -4px;
+  top: -4px;
+}
+
 .app {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr);
   height: 100vh;
   min-height: 520px;
   overflow: hidden;
+  position: relative;
 }
 
 .topbar {
   align-items: center;
-  background: var(--panel);
-  border-bottom: 1px solid var(--line);
+  background: transparent;
   display: flex;
-  gap: 18px;
   justify-content: center;
+  left: 0;
   padding: 12px clamp(14px, 4vw, 44px);
-  position: sticky;
+  position: absolute;
+  right: 0;
   top: 0;
   z-index: 10;
-}
-
-.topbar-brand {
-  align-items: center;
-  display: flex;
-  flex: 0 0 auto;
-  gap: 10px;
-  min-width: 0;
-}
-
-.brand-mark {
-  display: block;
-  filter: drop-shadow(0 6px 14px rgba(32, 33, 36, 0.08));
-  height: 38px;
-  width: 58px;
-}
-
-.brand-copy {
-  display: grid;
-  gap: 2px;
-  line-height: 1;
-}
-
-.brand-copy strong {
-  font-size: 1rem;
-  font-weight: 900;
-}
-
-.brand-copy span {
-  color: var(--muted);
-  font-size: 0.73rem;
-  font-weight: 700;
 }
 
 .hud {
@@ -106,13 +134,6 @@ button.active {
   margin: 0 auto;
   max-width: 820px;
   width: 100%;
-}
-
-.music-toggle {
-  align-self: flex-start;
-  background: rgba(255, 255, 255, 0.42);
-  flex: 0 0 auto;
-  min-width: 104px;
 }
 
 .eyebrow {
@@ -144,28 +165,6 @@ h1 {
   white-space: nowrap;
 }
 
-.day-progress {
-  background: linear-gradient(
-    90deg,
-    rgba(216, 162, 27, 0.18) 0%,
-    rgba(216, 162, 27, 0.18) 61.7%,
-    rgba(30, 41, 61, 0.24) 61.7%,
-    rgba(30, 41, 61, 0.2) 100%
-  );
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  height: 10px;
-  overflow: hidden;
-}
-
-.day-progress-fill {
-  background: linear-gradient(90deg, #d8a21b, #0d9fb3);
-  border-radius: 999px;
-  height: 100%;
-  transition: width 120ms linear;
-  width: 0%;
-}
-
 .hud-toast {
   align-self: start;
   background: rgba(244, 236, 218, 0.96);
@@ -188,63 +187,23 @@ h1 {
   transform: translateY(-6px);
 }
 
-.toolbar {
-  align-items: center;
-  background: #ddd2bc;
-  border-bottom: 1px solid var(--line);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: flex-start;
-  padding: 10px clamp(14px, 4vw, 44px);
-  position: sticky;
-  top: 0;
-  z-index: 11;
-}
-
 .speed-picker {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 
-.toolbar-primary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.toolbar-primary button,
 .speed-btn {
   background: #efe4bf;
   border-color: #cbb67e;
 }
 
-.toolbar-actions {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: flex-end;
-  margin-left: auto;
-}
-
-.toolbar-actions button {
-  background: #dcebdc;
-  border-color: #9fbea0;
-}
-
-.toolbar-label {
-  color: var(--muted);
-  font-size: 0.82rem;
-  font-weight: 900;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
 .speed-btn {
-  min-height: 36px;
-  padding: 0 10px;
+  border-radius: 999px;
+  height: 48px;
+  min-height: 48px;
+  padding: 0;
+  width: 48px;
 }
 
 .swatch {
@@ -255,9 +214,54 @@ h1 {
 }
 
 .playfield {
+  grid-row: 1;
   min-height: 0;
   overflow: hidden;
   position: relative;
+}
+
+.side-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: absolute;
+  top: 18px;
+  z-index: 4;
+}
+
+.side-controls-left {
+  left: 18px;
+}
+
+.side-controls-right {
+  right: 18px;
+}
+
+.side-controls-left button,
+.side-controls-left .speed-btn {
+  background: #efe4bf;
+  border-color: #cbb67e;
+  box-shadow: 0 10px 28px rgba(32, 33, 36, 0.14);
+}
+
+.side-controls-right button {
+  background: #dcebdc;
+  border-color: #9fbea0;
+  box-shadow: 0 10px 28px rgba(32, 33, 36, 0.14);
+}
+
+.speed-picker-vertical {
+  flex-direction: column;
+  flex-wrap: nowrap;
+}
+
+.side-controls .speed-btn,
+.side-controls button {
+  min-width: 0;
+}
+
+.music-toggle {
+  min-width: 0;
 }
 
 #gameCanvas {
@@ -293,7 +297,12 @@ h1 {
 }
 
 .inventory-btn {
+  border-radius: 999px;
+  height: 58px;
   box-shadow: 0 10px 28px rgba(32, 33, 36, 0.14);
+  min-height: 58px;
+  padding: 0;
+  width: 58px;
 }
 
 .inventory-btn.warn {
@@ -355,9 +364,11 @@ h1 {
   border-radius: 8px;
   box-shadow: 0 20px 56px rgba(32, 33, 36, 0.18);
   display: grid;
-  gap: 18px;
+  gap: 14px;
   justify-items: center;
+  max-height: min(760px, calc(100vh - 36px));
   max-width: min(460px, calc(100vw - 36px));
+  overflow: hidden;
   padding: 24px;
   text-align: center;
   width: 100%;
@@ -376,9 +387,14 @@ h1 {
 }
 
 .start-copy h2 {
-  font-size: clamp(2rem, 4vw, 3rem);
+  font-size: clamp(1rem, 2vw, 1.5rem);
   line-height: 1;
   margin: 0;
+}
+
+.start-copy .eyebrow {
+  font-size: clamp(1.3rem, 2.8vw, 2rem);
+  margin-bottom: 10px;
 }
 
 .field {
@@ -428,8 +444,9 @@ h1 {
   border: 1px solid rgba(32, 33, 36, 0.12);
   border-radius: 8px;
   display: grid;
-  gap: 10px;
-  padding: 14px;
+  gap: 8px;
+  min-height: 0;
+  padding: 12px;
   text-align: left;
   width: 100%;
 }
@@ -454,7 +471,11 @@ h1 {
 
 .leaderboard-list {
   display: grid;
-  gap: 8px;
+  gap: 6px;
+  max-height: min(320px, 38vh);
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .leaderboard-empty {
@@ -468,9 +489,10 @@ h1 {
   border: 1px solid rgba(32, 33, 36, 0.12);
   border-radius: 8px;
   display: grid;
-  gap: 10px;
+  gap: 8px;
   grid-template-columns: 36px minmax(0, 1fr) auto;
-  padding: 10px 12px;
+  min-height: 36px;
+  padding: 6px 10px;
 }
 
 .leaderboard-row.current-player {
@@ -492,18 +514,12 @@ h1 {
 }
 
 .leaderboard-meta {
-  color: var(--muted);
-  font-size: 0.82rem;
-  margin-top: 2px;
+  display: none;
 }
 
 .leaderboard-score {
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 800;
-}
-
-#startBtn {
-  min-width: 126px;
 }
 
 .results-modal {
@@ -519,6 +535,85 @@ h1 {
 
 .results-modal.hidden {
   display: none;
+}
+
+.shop-modal {
+  align-items: center;
+  background: rgba(230, 220, 199, 0.76);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 18px;
+  position: absolute;
+  z-index: 8;
+}
+
+.shop-modal.hidden {
+  display: none;
+}
+
+.shop-card {
+  background: rgba(244, 236, 218, 0.97);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 20px 56px rgba(32, 33, 36, 0.18);
+  display: grid;
+  gap: 16px;
+  max-width: min(420px, calc(100vw - 36px));
+  padding: 20px;
+  width: 100%;
+}
+
+.shop-head {
+  align-items: start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.shop-head h2 {
+  font-size: clamp(1.5rem, 3vw, 2.2rem);
+  line-height: 1;
+  margin: 0;
+}
+
+.shop-items {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  justify-items: center;
+}
+
+.shop-item-btn {
+  background: #dcebdc;
+  border-color: #9fbea0;
+  border-radius: 999px;
+  height: 78px;
+  min-height: 78px;
+  padding: 0;
+  width: 78px;
+}
+
+.shop-item-btn .btn-icon {
+  height: 28px;
+  width: 28px;
+}
+
+.shop-price {
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.start-card .modal-action-btn,
+.results-card .modal-action-btn {
+  justify-self: center;
+}
+
+.modal-close-btn {
+  height: 46px;
+  min-height: 46px;
+  width: 46px;
 }
 
 .results-card {
@@ -556,6 +651,7 @@ h1 {
   display: grid;
   gap: 8px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  justify-items: center;
   margin-bottom: 12px;
 }
 
@@ -565,16 +661,12 @@ h1 {
 
 @media (max-width: 760px) {
   .app {
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-rows: minmax(0, 1fr);
   }
 
   .topbar {
     align-items: flex-start;
     flex-direction: column;
-  }
-
-  .topbar-brand {
-    width: 100%;
   }
 
   .hud {

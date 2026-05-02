@@ -7,12 +7,14 @@ const ui = {
   trips: document.getElementById("trips"),
   score: document.getElementById("score"),
   stress: document.getElementById("stress"),
-  dayProgressFill: document.getElementById("dayProgressFill"),
   hudToast: document.getElementById("hudToast"),
   buyBridgeBtn: document.getElementById("buyBridgeBtn"),
   buyCarriageBtn: document.getElementById("buyCarriageBtn"),
   buyEngineBtn: document.getElementById("buyEngineBtn"),
   buyLineBtn: document.getElementById("buyLineBtn"),
+  shopBtn: document.getElementById("shopBtn"),
+  shopModal: document.getElementById("shopModal"),
+  closeShopBtn: document.getElementById("closeShopBtn"),
   inventoryBridgeBtn: document.getElementById("inventoryBridgeBtn"),
   inventoryCarriageBtn: document.getElementById("inventoryCarriageBtn"),
   inventoryEngineBtn: document.getElementById("inventoryEngineBtn"),
@@ -157,6 +159,7 @@ let leaderboardReady = false;
 let leaderboardEntries = [];
 let musicEnabled = loadStoredMusicEnabled();
 let hudToastTimer = null;
+let shopPausedGame = false;
 
 function loadStoredMusicEnabled() {
   try {
@@ -181,10 +184,30 @@ function resetMusic() {
   ui.bgMusic.currentTime = 0;
 }
 
+function iconMarkup(iconId) {
+  return `<svg class="btn-icon" aria-hidden="true"><use href="#${iconId}"></use></svg>`;
+}
+
+function speedIconId(value) {
+  if (value === 0.5) return "icon-speed-half";
+  if (value === 1) return "icon-speed-1";
+  if (value === 2) return "icon-speed-2";
+  return "icon-speed-4";
+}
+
+function itemIconId(item) {
+  if (item === "bridge") return "icon-bridge";
+  if (item === "carriage") return "icon-carriage";
+  if (item === "engine") return "icon-engine";
+  return "icon-line";
+}
+
 function updateMusicToggle() {
   if (!ui.musicToggleBtn) return;
-  ui.musicToggleBtn.textContent = musicEnabled ? "Music On" : "Music Off";
+  ui.musicToggleBtn.innerHTML = iconMarkup(musicEnabled ? "icon-music" : "icon-muted");
   ui.musicToggleBtn.setAttribute("aria-pressed", musicEnabled ? "true" : "false");
+  ui.musicToggleBtn.setAttribute("aria-label", musicEnabled ? "Music on" : "Music off");
+  ui.musicToggleBtn.title = musicEnabled ? "Music on" : "Music off";
   ui.musicToggleBtn.classList.toggle("active", musicEnabled);
 }
 
@@ -212,6 +235,7 @@ function showHudToast(message, duration = 2600) {
 function resetGame() {
   const terrain = createTerrain();
   disconnectMenu = null;
+  shopPausedGame = false;
   resetMusic();
   updateMusicToggle();
   speedMultiplier = 1;
@@ -286,6 +310,7 @@ function resetGame() {
   updateUI();
   ui.startModal.classList.remove("hidden");
   ui.resultsModal.classList.add("hidden");
+  ui.shopModal?.classList.add("hidden");
 }
 
 function startGame() {
@@ -681,8 +706,10 @@ function renderSpeedPicker() {
   SPEED_OPTIONS.forEach((option) => {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `speed-btn${option.value === speedMultiplier ? " active" : ""}`;
-    button.textContent = option.label;
+    button.className = `icon-btn speed-btn${option.value === speedMultiplier ? " active" : ""}`;
+    button.textContent = option.value === 1 ? "1x" : `${option.value}x`;
+    button.setAttribute("aria-label", option.label);
+    button.title = option.label;
     button.addEventListener("click", () => {
       speedMultiplier = option.value;
       renderSpeedPicker();
@@ -804,20 +831,15 @@ function renderLeaderboardList(container, entries) {
     rank.className = "leaderboard-rank";
     rank.textContent = `#${index + 1}`;
 
-    const identity = document.createElement("div");
     const name = document.createElement("div");
     name.className = "leaderboard-name";
     name.textContent = entry.player_name;
-    const meta = document.createElement("div");
-    meta.className = "leaderboard-meta";
-    meta.textContent = `${entry.days_operated}d · ${entry.passengers} pax · $${entry.revenue}`;
-    identity.append(name, meta);
 
     const score = document.createElement("span");
     score.className = "leaderboard-score";
     score.textContent = entry.score;
 
-    row.append(rank, identity, score);
+    row.append(rank, name, score);
     container.appendChild(row);
   });
 }
@@ -901,14 +923,45 @@ async function submitLeaderboardScore() {
 }
 
 function renderShopButtons() {
-  ui.buyBridgeBtn.textContent = `Bridge $${itemPrice("bridge")}`;
-  ui.buyCarriageBtn.textContent = `Carriage $${itemPrice("carriage")}`;
-  ui.buyEngineBtn.textContent = `Engine $${itemPrice("engine")}`;
-  ui.buyLineBtn.textContent = `Line $${itemPrice("line")}`;
+  ui.buyBridgeBtn.innerHTML = `${iconMarkup("icon-bridge")}<span class="shop-price">$${itemPrice("bridge")}</span>`;
+  ui.buyCarriageBtn.innerHTML = `${iconMarkup("icon-carriage")}<span class="shop-price">$${itemPrice("carriage")}</span>`;
+  ui.buyEngineBtn.innerHTML = `${iconMarkup("icon-engine")}<span class="shop-price">$${itemPrice("engine")}</span>`;
+  ui.buyLineBtn.innerHTML = `${iconMarkup("icon-line")}<span class="shop-price">$${itemPrice("line")}</span>`;
+  ui.buyBridgeBtn.setAttribute("aria-label", `Buy bridge for $${itemPrice("bridge")}`);
+  ui.buyCarriageBtn.setAttribute("aria-label", `Buy carriage for $${itemPrice("carriage")}`);
+  ui.buyEngineBtn.setAttribute("aria-label", `Buy engine for $${itemPrice("engine")}`);
+  ui.buyLineBtn.setAttribute("aria-label", `Buy line for $${itemPrice("line")}`);
+  ui.buyBridgeBtn.title = `Buy bridge for $${itemPrice("bridge")}`;
+  ui.buyCarriageBtn.title = `Buy carriage for $${itemPrice("carriage")}`;
+  ui.buyEngineBtn.title = `Buy engine for $${itemPrice("engine")}`;
+  ui.buyLineBtn.title = `Buy line for $${itemPrice("line")}`;
+}
+
+function openShop() {
+  if (!state.started || state.gameOver || ui.shopModal?.classList.contains("hidden") === false) return;
+  shopPausedGame = !state.paused;
+  state.paused = true;
+  ui.shopModal?.classList.remove("hidden");
+  syncMusicPlayback();
+  updateButtons();
+}
+
+function closeShop() {
+  if (!ui.shopModal || ui.shopModal.classList.contains("hidden")) return;
+  ui.shopModal.classList.add("hidden");
+  if (shopPausedGame && !state.gameOver) {
+    state.paused = false;
+  }
+  shopPausedGame = false;
+  syncMusicPlayback();
+  updateButtons();
 }
 
 function updateButtons() {
-  ui.pauseBtn.textContent = state.paused ? "Resume" : "Pause";
+  ui.pauseBtn.innerHTML = iconMarkup(state.paused ? "icon-play" : "icon-pause");
+  ui.pauseBtn.setAttribute("aria-label", state.paused ? "Resume" : "Pause");
+  ui.pauseBtn.title = state.paused ? "Resume" : "Pause";
+  if (ui.shopBtn) ui.shopBtn.disabled = !state.started || state.gameOver;
   ui.buyBridgeBtn.disabled = state.cash < itemPrice("bridge");
   ui.buyCarriageBtn.disabled = state.cash < itemPrice("carriage");
   ui.buyEngineBtn.disabled = state.cash < itemPrice("engine");
@@ -929,10 +982,6 @@ function updateUI() {
   ui.trips.textContent = state.trips;
   ui.score.textContent = state.score;
   ui.stress.textContent = `${Math.round(state.stress)}%`;
-  if (ui.dayProgressFill) {
-    ui.dayProgressFill.style.width = `${dayProgress() * 100}%`;
-    ui.dayProgressFill.title = formatClockTime(currentDayHour());
-  }
   ui.bridgeCount.textContent = state.inventory.bridges;
   ui.carriageCount.textContent = state.inventory.carriages;
   ui.engineCount.textContent = state.inventory.engines;
@@ -4447,6 +4496,10 @@ function loop(now) {
 
 ui.pauseBtn.addEventListener("click", () => {
   if (!state.started) return;
+  if (ui.shopModal && !ui.shopModal.classList.contains("hidden")) {
+    closeShop();
+    return;
+  }
   if (state.selectedItem) {
     state.selectedItem = null;
     updateUI();
@@ -4461,6 +4514,8 @@ ui.musicToggleBtn?.addEventListener("click", () => {
   storeMusicEnabled();
   syncMusicPlayback();
 });
+ui.shopBtn?.addEventListener("click", openShop);
+ui.closeShopBtn?.addEventListener("click", closeShop);
 ui.buyBridgeBtn.addEventListener("click", () => buyInventoryItem("bridge"));
 ui.buyCarriageBtn.addEventListener("click", () => buyInventoryItem("carriage"));
 ui.buyEngineBtn.addEventListener("click", () => buyInventoryItem("engine"));
@@ -4481,6 +4536,11 @@ ui.playerNameInput?.addEventListener("keydown", (event) => {
   }
 });
 window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && ui.shopModal && !ui.shopModal.classList.contains("hidden")) {
+    event.preventDefault();
+    closeShop();
+    return;
+  }
   if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
   const tagName = document.activeElement?.tagName;
   if (tagName === "INPUT" || tagName === "TEXTAREA" || document.activeElement?.isContentEditable) return;
@@ -4499,6 +4559,9 @@ window.addEventListener("keydown", (event) => {
 ui.restartBtn.addEventListener("click", resetGame);
 ui.startBtn.addEventListener("click", startGame);
 ui.resultsRestartBtn.addEventListener("click", resetGame);
+ui.shopModal?.addEventListener("click", (event) => {
+  if (event.target === ui.shopModal) closeShop();
+});
 document.querySelectorAll(".share-btn").forEach((button) => {
   button.addEventListener("click", () => {
     shareResults(button.dataset.platform).catch(() => downloadShareImage(createResultsShareCanvas(), button.dataset.platform));
@@ -4532,3 +4595,4 @@ initLeaderboard();
 resetGame();
 resizeCanvas();
 requestAnimationFrame(loop);
+

@@ -8,22 +8,114 @@
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
+    <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+      <symbol id="icon-pause" viewBox="0 0 64 64">
+        <rect x="18" y="15" width="10" height="34" rx="3" fill="currentColor"/>
+        <rect x="36" y="15" width="10" height="34" rx="3" fill="currentColor"/>
+      </symbol>
+      <symbol id="icon-play" viewBox="0 0 64 64">
+        <path d="M22 16L48 32L22 48Z" fill="currentColor"/>
+      </symbol>
+      <symbol id="icon-restart" viewBox="0 0 64 64">
+        <path d="M20 24V13L8 25L20 37V26C23 19 30 15 37 16C45 17 51 24 51 32C51 41 44 48 35 48C29 48 24 45 20 40" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="5"/>
+      </symbol>
+      <symbol id="icon-shop" viewBox="0 0 64 64">
+        <path d="M16 24H48L46 49H18Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="5"/>
+        <path d="M24 24C24 18 27 14 32 14C37 14 40 18 40 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="5"/>
+      </symbol>
+      <symbol id="icon-music" viewBox="0 0 64 64">
+        <path d="M22 17V43" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="5"/>
+        <path d="M22 18L45 13V38" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="5"/>
+        <circle cx="19" cy="47" r="7" fill="currentColor"/>
+        <circle cx="42" cy="42" r="7" fill="currentColor"/>
+      </symbol>
+      <symbol id="icon-muted" viewBox="0 0 64 64">
+        <path d="M18 27H28L39 18V46L28 37H18Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="5"/>
+        <path d="M45 24L54 40" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="5"/>
+        <path d="M54 24L45 40" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="5"/>
+      </symbol>
+      <symbol id="icon-close" viewBox="0 0 64 64">
+        <path d="M20 20L44 44" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="5"/>
+        <path d="M44 20L20 44" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="5"/>
+      </symbol>
+      <symbol id="icon-speed-half" viewBox="0 0 64 64">
+        <path d="M15 40C18 27 28 19 40 19" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="5"/>
+        <path d="M27 25L41 32L27 39Z" fill="currentColor"/>
+        <rect x="15" y="44" width="22" height="5" rx="2.5" fill="currentColor" opacity="0.6"/>
+      </symbol>
+      <symbol id="icon-speed-1" viewBox="0 0 64 64">
+        <path d="M15 40C18 27 28 19 40 19" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="5"/>
+        <path d="M24 22L42 32L24 42Z" fill="currentColor"/>
+      </symbol>
+      <symbol id="icon-speed-2" viewBox="0 0 64 64">
+        <path d="M12 40C15 27 25 19 37 19" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="5"/>
+        <path d="M18 22L32 32L18 42Z" fill="currentColor"/>
+        <path d="M32 22L46 32L32 42Z" fill="currentColor"/>
+      </symbol>
+      <symbol id="icon-speed-4" viewBox="0 0 64 64">
+        <path d="M10 40C13 27 23 19 35 19" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="5"/>
+        <path d="M14 22L25 32L14 42Z" fill="currentColor"/>
+        <path d="M24 22L35 32L24 42Z" fill="currentColor"/>
+        <path d="M34 22L45 32L34 42Z" fill="currentColor"/>
+        <circle cx="50" cy="32" r="4" fill="currentColor"/>
+      </symbol>
+      <symbol id="icon-bridge" viewBox="0 0 64 64">
+        <rect x="10" y="16" width="44" height="8" fill="currentColor"/>
+        <path d="M12 48C18 40 24 35 32 35C40 35 46 40 52 48" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="6"/>
+        <path d="M14 24V40" fill="none" stroke="currentColor" stroke-width="4.5"/>
+        <path d="M22 24V35" fill="none" stroke="currentColor" stroke-width="4.5"/>
+        <path d="M30 24V33" fill="none" stroke="currentColor" stroke-width="4.5"/>
+        <path d="M38 24V33" fill="none" stroke="currentColor" stroke-width="4.5"/>
+        <path d="M46 24V35" fill="none" stroke="currentColor" stroke-width="4.5"/>
+        <path d="M54 24V40" fill="none" stroke="currentColor" stroke-width="4.5"/>
+      </symbol>
+      <symbol id="icon-carriage" viewBox="0 0 64 64">
+        <rect x="13" y="20" width="38" height="20" rx="6" fill="none" stroke="currentColor" stroke-width="5"/>
+        <path d="M21 20V15H43V20" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="5"/>
+        <circle cx="22" cy="45" r="4" fill="currentColor"/>
+        <circle cx="42" cy="45" r="4" fill="currentColor"/>
+        <path d="M24 28H40" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="4"/>
+      </symbol>
+      <symbol id="icon-engine" viewBox="0 0 64 64">
+        <path d="M24 10C24 8.9 24.9 8 26 8H38C39.1 8 40 8.9 40 10V12H45C46.7 12 48 13.3 48 15C48 16.7 46.7 18 45 18H19C17.3 18 16 16.7 16 15C16 13.3 17.3 12 19 12H24V10Z" fill="currentColor"/>
+        <path d="M18 20C18 15.6 21.6 12 26 12H38C42.4 12 46 15.6 46 20V41C46 45.4 42.4 49 38 49H26C21.6 49 18 45.4 18 41V20Z" fill="currentColor"/>
+        <rect x="23" y="23" width="18" height="11" rx="2" fill="#f4ecda"/>
+        <circle cx="25" cy="41" r="3.5" fill="#f4ecda"/>
+        <circle cx="39" cy="41" r="3.5" fill="#f4ecda"/>
+        <path d="M23 50L17 60" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="4.5"/>
+        <path d="M41 50L47 60" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="4.5"/>
+        <path d="M18 56H46" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="4.5"/>
+      </symbol>
+      <symbol id="icon-line" viewBox="0 0 64 64">
+        <path d="M13 44H24C30 44 32 34 37 29C42 24 46 24 51 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="5"/>
+        <circle cx="13" cy="44" r="5" fill="none" stroke="currentColor" stroke-width="4"/>
+        <rect x="24" y="15" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="4"/>
+        <path d="M48 17L54 28H42Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="4"/>
+      </symbol>
+      <symbol id="icon-facebook" viewBox="0 0 64 64">
+        <path d="M36 19H43V10H36C28 10 23 15 23 24V31H16V40H23V54H33V40H41L43 31H33V25C33 21 34 19 36 19Z" fill="currentColor"/>
+      </symbol>
+      <symbol id="icon-instagram" viewBox="0 0 64 64">
+        <rect x="14" y="14" width="36" height="36" rx="10" fill="none" stroke="currentColor" stroke-width="5"/>
+        <circle cx="32" cy="32" r="9" fill="none" stroke="currentColor" stroke-width="5"/>
+        <circle cx="43.5" cy="20.5" r="3.5" fill="currentColor"/>
+      </symbol>
+      <symbol id="icon-whatsapp" viewBox="0 0 64 64">
+        <path d="M32 12C20 12 11 21 11 32C11 36 12 40 15 45L12 54L22 51C25 52 28 53 32 53C44 53 53 44 53 32C53 21 44 12 32 12Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="5"/>
+        <path d="M25 25C25 34 31 39 39 40L42 35C39 35 35 33 33 30C30 28 29 25 29 22Z" fill="currentColor"/>
+      </symbol>
+      <symbol id="icon-reddit" viewBox="0 0 64 64">
+        <circle cx="24" cy="33" r="4" fill="currentColor"/>
+        <circle cx="40" cy="33" r="4" fill="currentColor"/>
+        <path d="M22 40C25 43 30 44 32 44C34 44 39 43 42 40" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="4"/>
+        <ellipse cx="32" cy="34" rx="18" ry="12" fill="none" stroke="currentColor" stroke-width="5"/>
+        <circle cx="47" cy="26" r="4" fill="none" stroke="currentColor" stroke-width="4"/>
+        <path d="M26 21L29 15L38 17" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="4"/>
+        <path d="M41 24C43 23 45 23 47 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="4"/>
+      </symbol>
+    </svg>
     <main class="app">
       <section class="topbar" aria-label="Game status">
-        <div class="topbar-brand" aria-label="Tiny Transit">
-          <svg class="brand-mark" viewBox="0 0 72 48" aria-hidden="true">
-            <path d="M9 32H27C33 32 35 26 39 22C43 18 47 18 52 18H63" fill="none" stroke="#0d9fb3" stroke-linecap="round" stroke-linejoin="round" stroke-width="6"/>
-            <path d="M10 32H27C33 32 35 26 39 22C43 18 47 18 52 18H63" fill="none" stroke="rgba(255,255,255,0.7)" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
-            <circle cx="11" cy="32" r="7" fill="#f4ecda" stroke="#202124" stroke-width="3"/>
-            <rect x="31" y="14" width="14" height="14" rx="2" fill="#f4ecda" stroke="#202124" stroke-width="3"/>
-            <path d="M57 10L64 24H50Z" fill="#f4ecda" stroke="#202124" stroke-linejoin="round" stroke-width="3"/>
-            <rect x="20" y="25" width="9" height="7" rx="2.5" fill="#d8a21b" stroke="#202124" stroke-width="2"/>
-          </svg>
-          <div class="brand-copy">
-            <strong>Tiny Transit</strong>
-            <span>Keep the city moving</span>
-          </div>
-        </div>
         <div class="hud" aria-live="polite">
           <div class="stats">
             <span><strong id="day">Day 1</strong></span>
@@ -32,36 +124,49 @@
             <span>Score <strong id="score">0</strong></span>
             <span>Stress <strong id="stress">0%</strong></span>
           </div>
-          <div class="day-progress" aria-hidden="true">
-            <div class="day-progress-fill" id="dayProgressFill"></div>
-          </div>
           <div class="hud-toast hidden" id="hudToast" aria-live="polite"></div>
-        </div>
-        <button id="musicToggleBtn" class="music-toggle" type="button" aria-pressed="true">Music On</button>
-      </section>
-
-      <section class="toolbar" aria-label="Route controls">
-        <div class="toolbar-primary">
-          <div class="speed-picker" id="speedPicker" aria-label="Game speed"></div>
-          <button id="pauseBtn" type="button">Pause</button>
-          <button id="restartBtn" type="button">Restart</button>
-        </div>
-        <div class="toolbar-actions">
-          <span class="toolbar-label">Shop</span>
-          <button id="buyBridgeBtn" type="button">Bridge $80</button>
-          <button id="buyCarriageBtn" type="button">Carriage $200</button>
-          <button id="buyEngineBtn" type="button">Engine $240</button>
-          <button id="buyLineBtn" type="button">Line $300</button>
         </div>
       </section>
 
       <section class="playfield" aria-label="Tiny Transit game board">
         <canvas id="gameCanvas"></canvas>
+        <div class="side-controls side-controls-left" aria-label="Game controls">
+          <div class="speed-picker speed-picker-vertical" id="speedPicker" aria-label="Game speed"></div>
+          <button id="pauseBtn" class="icon-btn control-btn" type="button" aria-label="Pause" title="Pause">
+            <svg class="btn-icon" aria-hidden="true"><use href="#icon-pause"></use></svg>
+          </button>
+          <button id="restartBtn" class="icon-btn control-btn" type="button" aria-label="Restart" title="Restart">
+            <svg class="btn-icon" aria-hidden="true"><use href="#icon-restart"></use></svg>
+          </button>
+        </div>
+        <div class="side-controls side-controls-right" aria-label="Utility controls">
+          <button id="shopBtn" class="icon-btn control-btn" type="button" aria-label="Shop" title="Shop">
+            <svg class="btn-icon" aria-hidden="true"><use href="#icon-shop"></use></svg>
+          </button>
+          <button id="musicToggleBtn" class="icon-btn control-btn music-toggle" type="button" aria-pressed="true" aria-label="Music on" title="Music on">
+            <svg class="btn-icon" aria-hidden="true"><use href="#icon-music"></use></svg>
+          </button>
+        </div>
         <div class="inventory">
-          <button class="inventory-btn" id="inventoryBridgeBtn" type="button">Bridge <strong id="bridgeCount">0</strong></button>
-          <button class="inventory-btn" id="inventoryCarriageBtn" type="button">Carriage (C) <strong id="carriageCount">0</strong></button>
-          <button class="inventory-btn" id="inventoryEngineBtn" type="button">Engine (E) <strong id="engineCount">0</strong></button>
-          <button class="inventory-btn" id="inventoryLineBtn" type="button">Line (L) <strong id="lineCount">0</strong></button>
+          <button class="icon-btn inventory-btn" id="inventoryBridgeBtn" type="button" aria-label="Bridge inventory" title="Bridge inventory">
+            <svg class="btn-icon" aria-hidden="true"><use href="#icon-bridge"></use></svg>
+            <strong class="btn-badge" id="bridgeCount">0</strong>
+          </button>
+          <button class="icon-btn inventory-btn" id="inventoryCarriageBtn" type="button" aria-label="Carriage inventory (C)" title="Carriage inventory (C)">
+            <svg class="btn-icon" aria-hidden="true"><use href="#icon-carriage"></use></svg>
+            <strong class="btn-badge" id="carriageCount">0</strong>
+            <span class="btn-hotkey" aria-hidden="true">C</span>
+          </button>
+          <button class="icon-btn inventory-btn" id="inventoryEngineBtn" type="button" aria-label="Engine inventory (E)" title="Engine inventory (E)">
+            <svg class="btn-icon" aria-hidden="true"><use href="#icon-engine"></use></svg>
+            <strong class="btn-badge" id="engineCount">0</strong>
+            <span class="btn-hotkey" aria-hidden="true">E</span>
+          </button>
+          <button class="icon-btn inventory-btn" id="inventoryLineBtn" type="button" aria-label="Line inventory (L)" title="Line inventory (L)">
+            <svg class="btn-icon" aria-hidden="true"><use href="#icon-line"></use></svg>
+            <strong class="btn-badge" id="lineCount">0</strong>
+            <span class="btn-hotkey" aria-hidden="true">L</span>
+          </button>
         </div>
         <div class="start-modal" id="startModal" role="dialog" aria-modal="true" aria-labelledby="startTitle">
           <div class="start-card">
@@ -91,7 +196,9 @@
               </div>
               <div class="leaderboard-list" id="leaderboardList"></div>
             </section>
-            <button id="startBtn" type="button">Start</button>
+            <button id="startBtn" class="icon-btn modal-action-btn start-action-btn" type="button" aria-label="Start game" title="Start game">
+              <svg class="btn-icon" aria-hidden="true"><use href="#icon-play"></use></svg>
+            </button>
           </div>
         </div>
         <div class="results-modal hidden" id="resultsModal" role="dialog" aria-modal="true" aria-labelledby="resultsTitle">
@@ -105,10 +212,18 @@
               <span>Days operated <strong id="resultDays">0</strong></span>
             </div>
             <div class="share-actions" aria-label="Share result">
-              <button class="share-btn" data-platform="facebook" type="button">Facebook</button>
-              <button class="share-btn" data-platform="instagram" type="button">Instagram</button>
-              <button class="share-btn" data-platform="whatsapp" type="button">Whatsapp</button>
-              <button class="share-btn" data-platform="reddit" type="button">Reddit</button>
+              <button class="icon-btn share-btn" data-platform="facebook" type="button" aria-label="Share to Facebook" title="Share to Facebook">
+                <svg class="btn-icon" aria-hidden="true"><use href="#icon-facebook"></use></svg>
+              </button>
+              <button class="icon-btn share-btn" data-platform="instagram" type="button" aria-label="Share to Instagram" title="Share to Instagram">
+                <svg class="btn-icon" aria-hidden="true"><use href="#icon-instagram"></use></svg>
+              </button>
+              <button class="icon-btn share-btn" data-platform="whatsapp" type="button" aria-label="Share to Whatsapp" title="Share to Whatsapp">
+                <svg class="btn-icon" aria-hidden="true"><use href="#icon-whatsapp"></use></svg>
+              </button>
+              <button class="icon-btn share-btn" data-platform="reddit" type="button" aria-label="Share to Reddit" title="Share to Reddit">
+                <svg class="btn-icon" aria-hidden="true"><use href="#icon-reddit"></use></svg>
+              </button>
             </div>
             <section class="leaderboard-panel leaderboard-panel-results" aria-labelledby="resultsLeaderboardTitle">
               <div class="leaderboard-head">
@@ -117,7 +232,40 @@
               </div>
               <div class="leaderboard-list" id="resultsLeaderboardList"></div>
             </section>
-            <button id="resultsRestartBtn" type="button">Restart city</button>
+            <button id="resultsRestartBtn" class="icon-btn modal-action-btn" type="button" aria-label="Restart city" title="Restart city">
+              <svg class="btn-icon" aria-hidden="true"><use href="#icon-restart"></use></svg>
+            </button>
+          </div>
+        </div>
+        <div class="shop-modal hidden" id="shopModal" role="dialog" aria-modal="true" aria-labelledby="shopTitle">
+          <div class="shop-card">
+            <div class="shop-head">
+              <div>
+                <p class="eyebrow">Shop</p>
+                <h2 id="shopTitle">Purchase upgrades</h2>
+              </div>
+              <button id="closeShopBtn" class="icon-btn modal-close-btn" type="button" aria-label="Close shop" title="Close shop">
+                <svg class="btn-icon" aria-hidden="true"><use href="#icon-close"></use></svg>
+              </button>
+            </div>
+            <div class="shop-items">
+              <button class="icon-btn shop-item-btn" id="buyBridgeBtn" type="button" aria-label="Buy bridge" title="Buy bridge">
+                <svg class="btn-icon" aria-hidden="true"><use href="#icon-bridge"></use></svg>
+                <span class="shop-price">$80</span>
+              </button>
+              <button class="icon-btn shop-item-btn" id="buyCarriageBtn" type="button" aria-label="Buy carriage" title="Buy carriage">
+                <svg class="btn-icon" aria-hidden="true"><use href="#icon-carriage"></use></svg>
+                <span class="shop-price">$200</span>
+              </button>
+              <button class="icon-btn shop-item-btn" id="buyEngineBtn" type="button" aria-label="Buy engine" title="Buy engine">
+                <svg class="btn-icon" aria-hidden="true"><use href="#icon-engine"></use></svg>
+                <span class="shop-price">$240</span>
+              </button>
+              <button class="icon-btn shop-item-btn" id="buyLineBtn" type="button" aria-label="Buy line" title="Buy line">
+                <svg class="btn-icon" aria-hidden="true"><use href="#icon-line"></use></svg>
+                <span class="shop-price">$300</span>
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -129,3 +277,4 @@
     <script src="game.js"></script>
   </body>
 </html>
+
