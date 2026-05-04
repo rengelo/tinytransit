@@ -2812,21 +2812,12 @@ function expandMap() {
 }
 
 function extendInlandWaters(previousBounds) {
-  const targetArea = estimateLandArea(state.coastline, state.map) * state.inlandWaterRatio;
-  let currentArea = state.waterBodies.reduce((total, body) => total + waterBodyArea(body), 0);
-  if (currentArea >= targetArea) return;
+  const bands = expansionBands(previousBounds).map((band) => ({
+    ...band,
+    landArea: estimateBandLandArea(band),
+  })).filter((band) => band.landArea > 0.01);
 
-  for (let attempt = 0; currentArea < targetArea && attempt < 180; attempt += 1) {
-    const body = Math.random() < 0.3
-      ? createRiver(state.coastline, state.map)
-      : createLake(state.coastline, state.map);
-    if (!body) continue;
-    if (!waterBodyTouchesExpandedBand(body, previousBounds)) continue;
-    if (waterBodiesOverlapAny(body, state.waterBodies)) continue;
-    if (waterBodyBlocksTransit(body)) continue;
-    state.waterBodies.push(body);
-    currentArea += waterBodyArea(body);
-  }
+  bands.forEach((band) => populateExpansionBandWater(band));
 }
 
 function waterBodyTouchesExpandedBand(body, previousBounds) {
@@ -2843,6 +2834,168 @@ function waterBodySamplePoints(body) {
 
 function waterBodiesOverlapAny(body, existingBodies) {
   return existingBodies.some((other) => waterBodiesOverlap(body, other));
+}
+
+function expansionBands(previousBounds) {
+  return [
+    {
+      key: "west",
+      minX: -state.map.west + 0.04,
+      maxX: -previousBounds.west - 0.02,
+      minY: -state.map.north + 0.04,
+      maxY: 1 + state.map.south - 0.04,
+    },
+    {
+      key: "north",
+      minX: -previousBounds.west + 0.04,
+      maxX: 0.96,
+      minY: -state.map.north + 0.04,
+      maxY: -previousBounds.north - 0.02,
+    },
+    {
+      key: "south",
+      minX: -previousBounds.west + 0.04,
+      maxX: 0.96,
+      minY: 1 + previousBounds.south + 0.02,
+      maxY: 1 + state.map.south - 0.04,
+    },
+  ].filter((band) => band.maxX - band.minX >= WATER_GRID && band.maxY - band.minY >= WATER_GRID);
+}
+
+function estimateBandLandArea(band, terrain = state) {
+  const width = band.maxX - band.minX;
+  const height = band.maxY - band.minY;
+  if (width <= 0 || height <= 0) return 0;
+  const samplesX = 18;
+  const samplesY = 18;
+  let landSamples = 0;
+  for (let iy = 0; iy < samplesY; iy += 1) {
+    const y = band.minY + ((iy + 0.5) / samplesY) * height;
+    for (let ix = 0; ix < samplesX; ix += 1) {
+      const x = band.minX + ((ix + 0.5) / samplesX) * width;
+      if (isLandPointForTerrain(x, y, terrain)) landSamples += 1;
+    }
+  }
+  return width * height * (landSamples / (samplesX * samplesY));
+}
+
+function isLandPointForTerrain(x, y, terrain = state) {
+  const north = terrain.map?.north || 0;
+  const south = terrain.map?.south || 0;
+  if (y < -north || y > 1 + south) return false;
+  if (x >= 1 - SHORE_MARGIN) return false;
+  if (x >= 0 && x >= waterBoundaryAtForCoast(y, terrain.coastline) - SHORE_MARGIN) return false;
+  return !terrain.waterBodies.some((body) => waterBodyContainsPoint(body, x, y, WATER_GRID * 0.08));
+}
+
+function populateExpansionBandWater(band) {
+  const targetArea = band.landArea * state.inlandWaterRatio;
+  const minimumBodies = band.landArea >= WATER_GRID * WATER_GRID * 2 ? 1 : 0;
+  let spawnedArea = 0;
+  let spawnedBodies = 0;
+
+  for (let attempt = 0; attempt < 220 && (spawnedArea < targetArea || spawnedBodies < minimumBodies); attempt += 1) {
+    const body = createWaterBodyInBand(band);
+    if (!body) continue;
+    if (waterBodiesOverlapAny(body, state.waterBodies)) continue;
+    if (waterBodyBlocksTransit(body)) continue;
+    state.waterBodies.push(body);
+    spawnedArea += waterBodyArea(body);
+    spawnedBodies += 1;
+  }
+}
+
+function createWaterBodyInBand(band) {
+  if (Math.random() < 0.22) {
+    const river = createRiverInBand(state.coastline, state.map, band);
+    if (river) return river;
+  }
+  return createLakeInBand(state.coastline, state.map, band);
+}
+
+function createLakeInBand(coastline, mapOffsets, band) {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const widthCells = randomItem([1, 1, 2, 2, 3]);
+    const heightCells = randomItem([1, 1, 2]);
+    const width = widthCells * WATER_GRID;
+    const height = heightCells * WATER_GRID;
+    const minTop = band.minY;
+    const maxTop = band.maxY - height;
+    if (maxTop < minTop) continue;
+    const top = snapToGrid(randomBetween(minTop, maxTop));
+    const boundary = waterBoundaryAtForCoast(top + height / 2, coastline);
+    const minLeft = band.minX;
+    const maxLeft = Math.min(band.maxX - width, boundary - SHORE_MARGIN - width);
+    if (maxLeft < minLeft) continue;
+    const left = snapToGrid(randomBetween(minLeft, maxLeft));
+    const lake = createGridLake(left, top, widthCells, heightCells);
+    if (waterBodyInsideLand(lake, coastline, mapOffsets) && waterBodyFitsBand(lake, band)) return lake;
+  }
+  return null;
+}
+
+function createRiverInBand(coastline, mapOffsets, band) {
+  const bandWidth = band.maxX - band.minX;
+  const bandHeight = band.maxY - band.minY;
+  if (Math.max(bandWidth, bandHeight) < WATER_GRID * 4) return null;
+
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const horizontal = bandWidth >= bandHeight;
+    const width = WATER_GRID * randomItem([0.55, 0.7, 0.85]);
+    let river;
+
+    if (horizontal) {
+      const y = snapToGrid(randomBetween(band.minY + WATER_GRID * 0.4, band.maxY - WATER_GRID * 0.4));
+      const startX = snapToGrid(randomBetween(band.minX, band.maxX - WATER_GRID * 3));
+      const endX = snapToGrid(randomBetween(startX + WATER_GRID * 2, band.maxX));
+      const midX = snapToGrid(randomBetween(startX + WATER_GRID, endX - WATER_GRID));
+      const midY = snapToGrid(randomBetween(
+        Math.max(band.minY, y - WATER_GRID * 2),
+        Math.min(band.maxY, y + WATER_GRID * 2)
+      ));
+      river = {
+        type: "river",
+        points: [
+          { x: startX, y },
+          { x: midX, y },
+          { x: midX, y: midY },
+          { x: endX, y: midY },
+        ],
+        width,
+      };
+    } else {
+      const x = snapToGrid(randomBetween(band.minX + WATER_GRID * 0.4, band.maxX - WATER_GRID * 0.4));
+      const startY = snapToGrid(randomBetween(band.minY, band.maxY - WATER_GRID * 3));
+      const endY = snapToGrid(randomBetween(startY + WATER_GRID * 2, band.maxY));
+      const midY = snapToGrid(randomBetween(startY + WATER_GRID, endY - WATER_GRID));
+      const midX = snapToGrid(randomBetween(
+        Math.max(band.minX, x - WATER_GRID * 2),
+        Math.min(band.maxX, x + WATER_GRID * 2)
+      ));
+      river = {
+        type: "river",
+        points: [
+          { x, y: startY },
+          { x, y: midY },
+          { x: midX, y: midY },
+          { x: midX, y: endY },
+        ],
+        width,
+      };
+    }
+
+    if (waterBodyInsideLand(river, coastline, mapOffsets) && waterBodyFitsBand(river, band)) return river;
+  }
+  return null;
+}
+
+function waterBodyFitsBand(body, band) {
+  return waterBodySamplePoints(body).every((point) => {
+    return point.x >= band.minX &&
+      point.x <= band.maxX &&
+      point.y >= band.minY &&
+      point.y <= band.maxY;
+  });
 }
 
 function waterBodiesOverlap(a, b) {
@@ -3397,7 +3550,11 @@ function draw() {
   drawSharpTurnWarnings();
   drawBridges();
   drawRouteDrag();
+  ctx.restore();
   drawNightMapShade(rect);
+  ctx.save();
+  ctx.translate(metrics.offsetX + camera.x, metrics.offsetY + camera.y);
+  ctx.scale(camera.zoom, camera.zoom);
   drawStations();
   drawPlanes();
   drawShips();
@@ -3457,9 +3614,8 @@ function drawWater(rect) {
 function drawNightMapShade(rect) {
   const intensity = nightIntensity();
   if (intensity <= 0) return;
-  const metrics = mapViewportMetrics(rect);
   ctx.fillStyle = `rgba(20, 28, 44, ${MAX_NIGHT_DIM * intensity})`;
-  ctx.fillRect(0, 0, metrics.worldWidth, metrics.worldHeight);
+  ctx.fillRect(0, 0, rect.width, rect.height);
 }
 
 function drawInlandWaterCells(rect) {
