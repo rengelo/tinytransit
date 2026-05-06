@@ -38,6 +38,13 @@
         <path d="M20 20L44 44" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="5"/>
         <path d="M44 20L20 44" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="5"/>
       </symbol>
+      <symbol id="icon-remove" viewBox="0 0 64 64">
+        <path d="M20 21H44" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="5"/>
+        <path d="M26 21V16H38V21" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="5"/>
+        <path d="M24 27L27 50H37L40 27" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="5"/>
+        <path d="M31 32V45" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="4"/>
+        <path d="M37 32L36 45" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="4"/>
+      </symbol>
       <symbol id="icon-speed-half" viewBox="0 0 64 64">
         <path d="M15 40C18 27 28 19 40 19" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="5"/>
         <path d="M27 25L41 32L27 39Z" fill="currentColor"/>
@@ -166,6 +173,10 @@
             <svg class="btn-icon" aria-hidden="true"><use href="#icon-line"></use></svg>
             <strong class="btn-badge" id="lineCount">0</strong>
             <span class="btn-hotkey" aria-hidden="true">L</span>
+          </button>
+          <button id="removeBtn" class="icon-btn inventory-btn remove-btn" type="button" aria-label="Remove mode (D)" title="Remove mode (D)">
+            <svg class="btn-icon" aria-hidden="true"><use href="#icon-remove"></use></svg>
+            <span class="btn-hotkey" aria-hidden="true">D</span>
           </button>
         </div>
         <div class="start-modal" id="startModal" role="dialog" aria-modal="true" aria-labelledby="startTitle">

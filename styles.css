@@ -122,6 +122,7 @@ button.active {
   left: 0;
   padding: 12px clamp(14px, 4vw, 44px);
   position: absolute;
+  pointer-events: none;
   right: 0;
   top: 0;
   z-index: 10;
@@ -250,6 +251,12 @@ h1 {
   box-shadow: 0 10px 28px rgba(32, 33, 36, 0.14);
 }
 
+.remove-btn.active {
+  background: #f4d4cb;
+  border-color: #e5524d;
+  color: #202124;
+}
+
 .speed-picker-vertical {
   flex-direction: column;
   flex-wrap: nowrap;
@@ -348,7 +355,7 @@ h1 {
   display: flex;
   inset: 0;
   justify-content: center;
-  padding: 18px;
+  padding: 12px;
   position: absolute;
   z-index: 7;
 }
@@ -364,37 +371,38 @@ h1 {
   border-radius: 8px;
   box-shadow: 0 20px 56px rgba(32, 33, 36, 0.18);
   display: grid;
-  gap: 14px;
+  gap: 10px;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
   justify-items: center;
-  max-height: min(760px, calc(100vh - 36px));
-  max-width: min(460px, calc(100vw - 36px));
+  max-height: min(680px, calc(var(--viewport-height, 100dvh) - 24px));
+  max-width: min(420px, calc(100vw - 24px));
   overflow: hidden;
-  padding: 24px;
+  padding: 18px 22px;
   text-align: center;
   width: 100%;
 }
 
 .start-brand {
   display: grid;
-  gap: 10px;
+  gap: 6px;
   justify-items: center;
 }
 
 .start-mark {
   display: block;
-  height: 76px;
-  width: 114px;
+  height: 58px;
+  width: 87px;
 }
 
 .start-copy h2 {
-  font-size: clamp(1rem, 2vw, 1.5rem);
+  font-size: clamp(0.95rem, 1.8vw, 1.25rem);
   line-height: 1;
   margin: 0;
 }
 
 .start-copy .eyebrow {
-  font-size: clamp(1.3rem, 2.8vw, 2rem);
-  margin-bottom: 10px;
+  font-size: clamp(1.2rem, 2.4vw, 1.65rem);
+  margin-bottom: 6px;
 }
 
 .field {
@@ -416,7 +424,7 @@ h1 {
   border-radius: 8px;
   color: var(--ink);
   font: inherit;
-  padding: 12px 14px;
+  padding: 10px 12px;
   width: 100%;
 }
 
@@ -428,8 +436,8 @@ h1 {
 
 .field-hint {
   color: var(--muted);
-  font-size: 0.92rem;
-  margin: -8px 0 0;
+  font-size: 0.88rem;
+  margin: -6px 0 0;
   min-height: 1.2em;
   text-align: left;
   width: 100%;
@@ -444,9 +452,9 @@ h1 {
   border: 1px solid rgba(32, 33, 36, 0.12);
   border-radius: 8px;
   display: grid;
-  gap: 8px;
+  gap: 6px;
   min-height: 0;
-  padding: 12px;
+  padding: 10px;
   text-align: left;
   width: 100%;
 }
@@ -471,8 +479,8 @@ h1 {
 
 .leaderboard-list {
   display: grid;
-  gap: 6px;
-  max-height: min(320px, 38vh);
+  gap: 5px;
+  max-height: min(250px, 30vh);
   min-height: 0;
   overflow: auto;
   padding-right: 4px;
@@ -491,8 +499,8 @@ h1 {
   display: grid;
   gap: 8px;
   grid-template-columns: 36px minmax(0, 1fr) auto;
-  min-height: 36px;
-  padding: 6px 10px;
+  min-height: 32px;
+  padding: 5px 10px;
 }
 
 .leaderboard-row.current-player {
@@ -597,6 +605,10 @@ h1 {
 .shop-item-btn .btn-icon {
   height: 28px;
   width: 28px;
+}
+
+.shop-item-btn.unaffordable {
+  opacity: 0.72;
 }
 
 .shop-price {

@@ -13,6 +13,7 @@ const ui = {
   buyEngineBtn: document.getElementById("buyEngineBtn"),
   buyLineBtn: document.getElementById("buyLineBtn"),
   shopBtn: document.getElementById("shopBtn"),
+  removeBtn: document.getElementById("removeBtn"),
   shopModal: document.getElementById("shopModal"),
   closeShopBtn: document.getElementById("closeShopBtn"),
   inventoryBridgeBtn: document.getElementById("inventoryBridgeBtn"),
@@ -93,16 +94,24 @@ const SHARP_TURN_ANGLE = Math.PI / 2;
 const SHORE_MARGIN = 0.035;
 const STATION_LAND_RADIUS = 0.045;
 const LINE_GRAB_RADIUS = 16;
+const TERMINAL_HANDLE_LENGTH = 36;
+const TERMINAL_HANDLE_SIZE = 18;
+const TERMINAL_HANDLE_HIT_RADIUS = 38;
 const ROUTE_WATER_CLEARANCE = 0.018;
 const SEA_COLOR = "#dceff2";
 const INLAND_WATER_COLOR = "#86c9d8";
+const LAND_FOG_RGB = { r: 201, g: 191, b: 172 };
+const OCEAN_FOG_RGB = { r: 213, g: 234, b: 237 };
 const WATER_GRID = 0.08;
 const GRID_SIZE = 64;
 const WORLD_SCALE = GRID_SIZE / WATER_GRID;
 const WATER_RADIUS = 12;
 const INLAND_WATER_RATIO_MIN = 0.035;
 const INLAND_WATER_RATIO_MAX = 0.21;
+const PREGENERATED_TERRAIN_BOUNDS = { west: 6.52, north: 3.26, south: 3.26 };
+const PREGENERATED_WATER_BAND_SPAN = 1.4;
 const MAP_EXPAND_FACTOR = 1.12;
+const PLAYABLE_BOUNDS_STAGES = buildRevealStages(PREGENERATED_TERRAIN_BOUNDS);
 const AIRPORT_DAY_VARIANCE = 2;
 const FIRST_AIRPORT_DAY = 15;
 const AIRPORT_DAY_INTERVAL = 9;
@@ -131,6 +140,7 @@ const DEBUG_START_DAY = 1;
 const DAY_START_HOUR = 7;
 const NIGHT_START_PROGRESS = 0.617;
 const MAX_NIGHT_DIM = 0.575;
+const NIGHT_SHADE_RGB = { r: 20, g: 28, b: 44 };
 const LEADERBOARD_TABLE = "leaderboard_entries";
 const LEADERBOARD_LIMIT = 10;
 const PLAYER_NAME_MAX = 24;
@@ -151,6 +161,7 @@ let state;
 let lastTime = performance.now();
 let pointer = { x: 0, y: 0, worldX: 0, worldY: 0, stationId: null };
 let camera = { zoom: 1, x: 0, y: 0 };
+let debugFullMapView = false;
 let speedMultiplier = 1;
 let routeDrag = null;
 let trainDrag = null;
@@ -190,6 +201,35 @@ function resetMusic() {
   if (!ui.bgMusic) return;
   ui.bgMusic.pause();
   ui.bgMusic.currentTime = 0;
+}
+
+function buildRevealStages(finalBounds) {
+  const stages = [{ west: 0, north: 0, south: 0 }];
+  let current = stages[0];
+  for (let guard = 0; guard < 64; guard += 1) {
+    if (
+      current.west >= finalBounds.west &&
+      current.north >= finalBounds.north &&
+      current.south >= finalBounds.south
+    ) {
+      break;
+    }
+    const width = 1 + current.west;
+    const height = 1 + current.north + current.south;
+    const next = {
+      west: Math.min(finalBounds.west, current.west + width * (MAP_EXPAND_FACTOR - 1)),
+      north: Math.min(finalBounds.north, current.north + (height * (MAP_EXPAND_FACTOR - 1)) / 2),
+      south: Math.min(finalBounds.south, current.south + (height * (MAP_EXPAND_FACTOR - 1)) / 2),
+    };
+    const unchanged =
+      Math.abs(next.west - current.west) < 1e-6 &&
+      Math.abs(next.north - current.north) < 1e-6 &&
+      Math.abs(next.south - current.south) < 1e-6;
+    if (unchanged) break;
+    stages.push(next);
+    current = next;
+  }
+  return stages;
 }
 
 function iconMarkup(iconId) {
@@ -242,11 +282,14 @@ function showHudToast(message, duration = 2600) {
 
 function resetGame() {
   const terrain = createTerrain();
+  const initialRevealStage = 0;
+  const initialPlayableBounds = PLAYABLE_BOUNDS_STAGES[initialRevealStage];
   disconnectMenu = null;
   shopPausedGame = false;
   resetMusic();
   updateMusicToggle();
   speedMultiplier = 1;
+  debugFullMapView = false;
   state = {
     activeLine: 0,
     paused: false,
@@ -263,6 +306,7 @@ function resetGame() {
     stress: 0,
     playerName: loadStoredPlayerName(),
     selectedItem: null,
+    removeMode: false,
     inventory: {
       bridges: 0,
       carriages: 0,
@@ -270,11 +314,13 @@ function resetGame() {
       lines: 0,
     },
     bridges: [],
-    map: {
-      west: 0,
-      north: 0,
-      south: 0,
+    revealStage: initialRevealStage,
+    world: {
+      west: PREGENERATED_TERRAIN_BOUNDS.west,
+      north: PREGENERATED_TERRAIN_BOUNDS.north,
+      south: PREGENERATED_TERRAIN_BOUNDS.south,
     },
+    map: { ...initialPlayableBounds },
     spawnTimer: 0,
     stationTimer: 0,
     nextAirportDay: randomInt(
@@ -390,26 +436,48 @@ function removeEmptyNewLine(lineId) {
 
 function createTerrain() {
   const inlandWaterRatio = randomBetween(INLAND_WATER_RATIO_MIN, INLAND_WATER_RATIO_MAX);
+  const worldBounds = PREGENERATED_TERRAIN_BOUNDS;
+  const baseBounds = PLAYABLE_BOUNDS_STAGES[0];
+  const baseRect = terrainRectForMapOffsets(baseBounds);
+  const starterWaterMargin = WATER_GRID * 1.2;
+  const starterBoundaryMargin = WATER_GRID * 0.6;
   let coastline = createCoastline();
-  for (let attempt = 0; attempt < 40; attempt += 1) {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
     coastline = createCoastline();
-    const dryTerrain = { coastline, waterBodies: [] };
-    if (!starterLayoutFitsTerrain(dryTerrain)) continue;
-    return {
+    const baseWaterBodies = createInlandWaters(coastline, baseBounds, inlandWaterRatio).filter((body) => {
+      return waterBodyWithinTerrainRect(body, baseRect, starterWaterMargin);
+    });
+    const terrain = {
       coastline,
-      waterBodies: createInlandWaters(coastline, { west: 0, north: 0, south: 0 }, inlandWaterRatio),
+      waterBodies: [...baseWaterBodies],
       inlandWaterRatio,
+      map: worldBounds,
     };
+
+    populateFullWorldWaters(terrain, worldBounds, (body) => {
+      return waterBodyBlocksStarter(body) ||
+        waterBodyTouchesTerrainRect(body, baseRect, starterBoundaryMargin);
+    });
+
+    if (starterLayoutFitsTerrain(terrain)) return terrain;
   }
-  return {
+  const fallbackTerrain = {
     coastline,
-    waterBodies: createInlandWaters(coastline, { west: 0, north: 0, south: 0 }, inlandWaterRatio),
+    waterBodies: createInlandWaters(coastline, baseBounds, inlandWaterRatio).filter((body) => {
+      return waterBodyWithinTerrainRect(body, baseRect, starterWaterMargin);
+    }),
     inlandWaterRatio,
+    map: worldBounds,
   };
+  populateFullWorldWaters(fallbackTerrain, worldBounds, (body) => {
+    return waterBodyBlocksStarter(body) ||
+      waterBodyTouchesTerrainRect(body, baseRect, starterBoundaryMargin);
+  });
+  return fallbackTerrain;
 }
 
 function createCoastline() {
-  if (Math.random() < 0.5) return null;
+  if (Math.random() < 0.35) return null;
   return {
     startX: randomBetween(0.72, 0.84),
     control1X: randomBetween(0.66, 0.82),
@@ -474,6 +542,56 @@ function createGuaranteedLakes(coastline) {
   }
 
   return lakes;
+}
+
+function seedPregeneratedHiddenLakes(terrain, visibleBounds, fullBounds, blocksBody = waterBodyBlocksStarter) {
+  const step = 0.62;
+  const margin = WATER_GRID * 1.6;
+  for (let y = -fullBounds.north + margin; y <= 1 + fullBounds.south - margin; y += step) {
+    for (let x = -fullBounds.west + margin; x <= 1 - margin; x += step) {
+      if (x >= -visibleBounds.west && x <= 1 && y >= -visibleBounds.north && y <= 1 + visibleBounds.south) continue;
+      if (Math.random() >= 0.38) continue;
+      const lake = createGridLakeAt(
+        snapToGrid(x),
+        snapToGrid(y),
+        randomItem([1, 1, 2]),
+        randomItem([1, 1, 2])
+      );
+      if (!waterBodyInsideLand(lake, terrain.coastline, fullBounds)) continue;
+      if (waterBodiesOverlapAny(lake, terrain.waterBodies)) continue;
+      if (blocksBody(lake)) continue;
+      terrain.waterBodies.push(lake);
+    }
+  }
+}
+
+function populateFullWorldWaters(terrain, worldBounds, blocksBody = waterBodyBlocksStarter) {
+  const worldRect = terrainRectForMapOffsets(worldBounds);
+  const tileSize = 0.64;
+  const margin = WATER_GRID * 1.1;
+  const chance = Math.max(0.36, Math.min(0.75, terrain.inlandWaterRatio * 3.38));
+
+  for (let minY = worldRect.minY + margin; minY < worldRect.maxY - margin; minY += tileSize) {
+    const maxY = Math.min(worldRect.maxY - margin, minY + tileSize);
+    for (let minX = worldRect.minX + margin; minX < worldRect.maxX - margin; minX += tileSize) {
+      const maxX = Math.min(worldRect.maxX - margin, minX + tileSize);
+      const band = {
+        key: "world",
+        minX,
+        maxX,
+        minY,
+        maxY,
+      };
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+      if (!isLandPointForTerrain(centerX, centerY, terrain) || Math.random() > chance) continue;
+      const body = createWaterBodyInBandForTerrain(terrain, { ...band, landArea: (maxX - minX) * (maxY - minY) }, worldBounds);
+      if (!body) continue;
+      if (blocksBody(body)) continue;
+      if (waterBodiesOverlapAny(body, terrain.waterBodies)) continue;
+      terrain.waterBodies.push(body);
+    }
+  }
 }
 
 function createLake(coastline, mapOffsets = { west: 0, north: 0, south: 0 }) {
@@ -605,6 +723,58 @@ function waterBodyInsideLand(body, coastline, mapOffsets = { west: 0, north: 0, 
       point.y > -mapOffsets.north + 0.04 &&
       point.y < 1 + mapOffsets.south - 0.04 &&
       point.x + clearance + SHORE_MARGIN < waterBoundaryAtForCoast(point.y, coastline);
+  });
+}
+
+function terrainRectForMapOffsets(mapOffsets = { west: 0, north: 0, south: 0 }) {
+  return {
+    minX: -mapOffsets.west,
+    maxX: 1,
+    minY: -mapOffsets.north,
+    maxY: 1 + mapOffsets.south,
+  };
+}
+
+function insetTerrainRect(rect, margin = 0) {
+  return {
+    minX: rect.minX + margin,
+    maxX: rect.maxX - margin,
+    minY: rect.minY + margin,
+    maxY: rect.maxY - margin,
+  };
+}
+
+function waterBodyWithinTerrainRect(body, rect, margin = 0) {
+  const inner = insetTerrainRect(rect, margin);
+  if (inner.maxX <= inner.minX || inner.maxY <= inner.minY) return false;
+  return waterBodySamplePoints(body).every((point) => {
+    return point.x >= inner.minX &&
+      point.x <= inner.maxX &&
+      point.y >= inner.minY &&
+      point.y <= inner.maxY;
+  });
+}
+
+function waterBodyTouchesTerrainRect(body, rect, clearance = 0) {
+  const expanded = {
+    minX: rect.minX - clearance,
+    maxX: rect.maxX + clearance,
+    minY: rect.minY - clearance,
+    maxY: rect.maxY + clearance,
+  };
+
+  if (body.type === "lake") {
+    return !(body.left + body.width < expanded.minX ||
+      body.left > expanded.maxX ||
+      body.top + body.height < expanded.minY ||
+      body.top > expanded.maxY);
+  }
+
+  return waterBodySamplePoints(body).some((point) => {
+    return point.x >= expanded.minX &&
+      point.x <= expanded.maxX &&
+      point.y >= expanded.minY &&
+      point.y <= expanded.maxY;
   });
 }
 
@@ -950,6 +1120,8 @@ function openShop() {
   if (!state.started || state.gameOver || ui.shopModal?.classList.contains("hidden") === false) return;
   shopPausedGame = !state.paused;
   state.paused = true;
+  state.removeMode = false;
+  disconnectMenu = null;
   ui.shopModal?.classList.remove("hidden");
   syncMusicPlayback();
   updateButtons();
@@ -971,10 +1143,16 @@ function updateButtons() {
   ui.pauseBtn.setAttribute("aria-label", state.paused ? "Resume" : "Pause");
   ui.pauseBtn.title = state.paused ? "Resume" : "Pause";
   if (ui.shopBtn) ui.shopBtn.disabled = !state.started || state.gameOver;
-  ui.buyBridgeBtn.disabled = state.cash < itemPrice("bridge");
-  ui.buyCarriageBtn.disabled = state.cash < itemPrice("carriage");
-  ui.buyEngineBtn.disabled = state.cash < itemPrice("engine");
-  ui.buyLineBtn.disabled = state.cash < itemPrice("line");
+  if (ui.removeBtn) {
+    ui.removeBtn.disabled = !state.started || state.gameOver;
+    ui.removeBtn.classList.toggle("active", !!state.removeMode);
+    ui.removeBtn.setAttribute("aria-pressed", state.removeMode ? "true" : "false");
+    ui.removeBtn.title = state.removeMode ? "Remove mode on (D)" : "Remove mode (D)";
+  }
+  updateShopButtonState(ui.buyBridgeBtn, "bridge");
+  updateShopButtonState(ui.buyCarriageBtn, "carriage");
+  updateShopButtonState(ui.buyEngineBtn, "engine");
+  updateShopButtonState(ui.buyLineBtn, "line");
   ui.inventoryBridgeBtn.classList.toggle("active", state.selectedItem === "bridge");
   ui.inventoryCarriageBtn.classList.toggle("active", state.selectedItem === "carriage");
   ui.inventoryEngineBtn.classList.toggle("active", state.selectedItem === "engine");
@@ -983,6 +1161,14 @@ function updateButtons() {
   ui.inventoryCarriageBtn.disabled = state.inventory.carriages <= 0 && state.selectedItem !== "carriage";
   ui.inventoryEngineBtn.disabled = state.inventory.engines <= 0 && state.selectedItem !== "engine";
   ui.inventoryLineBtn.disabled = state.inventory.lines <= 0 && state.selectedItem !== "line";
+}
+
+function updateShopButtonState(button, item) {
+  if (!button) return;
+  const unaffordable = state.cash < itemPrice(item);
+  button.disabled = !state.started || state.gameOver;
+  button.classList.toggle("unaffordable", unaffordable);
+  button.setAttribute("aria-disabled", unaffordable ? "true" : "false");
 }
 
 function updateUI() {
@@ -1259,7 +1445,7 @@ function trackPathBetweenStations(from, to, variant = 0) {
   return generateTrackPath(stationTrackPosition(from), stationTrackPosition(to), variant);
 }
 
-function trackPathBetweenTerrainPoints(a, b, mapOffsets = state?.map || { west: 0, north: 0, south: 0 }, variant = 0) {
+function trackPathBetweenTerrainPoints(a, b, mapOffsets = worldMapBounds(), variant = 0) {
   const rect = canvas.getBoundingClientRect();
   const worldA = terrainPointToWorldForOffsets(a.x, a.y, mapOffsets, rect);
   const worldB = terrainPointToWorldForOffsets(b.x, b.y, mapOffsets, rect);
@@ -1520,11 +1706,52 @@ function mapHeight() {
   return 1 + state.map.north + state.map.south;
 }
 
+function worldMapBounds() {
+  return state?.world || state?.map || { west: 0, north: 0, south: 0 };
+}
+
+function playableTerrainBounds() {
+  const map = state?.map || { west: 0, north: 0, south: 0 };
+  return {
+    minX: -map.west,
+    maxX: 1,
+    minY: -map.north,
+    maxY: 1 + map.south,
+  };
+}
+
+function cameraTerrainBounds() {
+  if (!debugFullMapView) return playableTerrainBounds();
+  const world = worldMapBounds();
+  return {
+    minX: -world.west,
+    maxX: 1,
+    minY: -world.north,
+    maxY: 1 + world.south,
+  };
+}
+
+function terrainBoundsToWorldRect(bounds, rect = canvas.getBoundingClientRect(), mapOffsets = worldMapBounds()) {
+  const metrics = mapViewportMetrics(rect, mapOffsets);
+  const left = (bounds.minX + metrics.west) * metrics.scaleX;
+  const top = (bounds.minY + metrics.north) * metrics.scaleY;
+  const right = (bounds.maxX + metrics.west) * metrics.scaleX;
+  const bottom = (bounds.maxY + metrics.north) * metrics.scaleY;
+  return {
+    left,
+    top,
+    right,
+    bottom,
+    width: Math.max(WORLD_SCALE * 0.8, right - left),
+    height: Math.max(WORLD_SCALE * 0.8, bottom - top),
+  };
+}
+
 function useStableMobileMap() {
   return true;
 }
 
-function mapViewportMetrics(rect = canvas.getBoundingClientRect(), mapOffsets = state?.map || { west: 0, north: 0, south: 0 }) {
+function mapViewportMetrics(rect = canvas.getBoundingClientRect(), mapOffsets = worldMapBounds()) {
   const width = rect.width || canvas.width || 1;
   const height = rect.height || canvas.height || 1;
   const west = mapOffsets.west || 0;
@@ -1568,45 +1795,67 @@ function screenToWorld(x, y) {
 function clampCamera() {
   const rect = canvas.getBoundingClientRect();
   const metrics = mapViewportMetrics(rect);
-  const scaledWidth = metrics.scaledWorldWidth;
-  const scaledHeight = metrics.scaledWorldHeight;
-  const minZoom = minCameraZoom();
-  const allowSlackPan = camera.zoom > minZoom + 0.001;
+  const playable = terrainBoundsToWorldRect(cameraTerrainBounds(), rect);
+  const minCameraX = rect.width - metrics.offsetX - (playable.left + playable.width) * camera.zoom;
+  const maxCameraX = -metrics.offsetX - playable.left * camera.zoom;
+  const minCameraY = rect.height - metrics.offsetY - (playable.top + playable.height) * camera.zoom;
+  const maxCameraY = -metrics.offsetY - playable.top * camera.zoom;
 
-  if (scaledWidth <= rect.width) {
-    if (allowSlackPan) {
-      const slack = (rect.width - scaledWidth) / 2;
-      camera.x = Math.max(-slack, Math.min(slack, camera.x));
-    } else {
-      camera.x = 0;
-    }
+  if (playable.width * camera.zoom <= rect.width) {
+    camera.x = (rect.width - playable.width * camera.zoom) / 2 - metrics.offsetX - playable.left * camera.zoom;
   } else {
-    camera.x = Math.min(0, Math.max(rect.width - scaledWidth, camera.x));
+    camera.x = Math.max(minCameraX, Math.min(maxCameraX, camera.x));
   }
 
-  if (scaledHeight <= rect.height) {
-    if (allowSlackPan) {
-      const slack = (rect.height - scaledHeight) / 2;
-      camera.y = Math.max(-slack, Math.min(slack, camera.y));
-    } else {
-      camera.y = 0;
-    }
+  if (playable.height * camera.zoom <= rect.height) {
+    camera.y = (rect.height - playable.height * camera.zoom) / 2 - metrics.offsetY - playable.top * camera.zoom;
   } else {
-    camera.y = Math.min(0, Math.max(rect.height - scaledHeight, camera.y));
+    camera.y = Math.max(minCameraY, Math.min(maxCameraY, camera.y));
   }
 }
 
 function fitCameraToMap() {
-  camera.zoom = minCameraZoom();
-  camera.x = 0;
-  camera.y = 0;
+  const bounds = cameraTerrainBounds();
+  focusCameraOnTerrainBounds(bounds.minX, bounds.maxX, bounds.minY, bounds.maxY, 0);
+}
+
+function fitCameraToStartRegion() {
+  focusCameraOnTerrainBounds(-2.8, 1, -1.6, 2.2, 0.16);
+}
+
+function toggleDebugFullMapView() {
+  if (!state) return;
+  debugFullMapView = !debugFullMapView;
+  fitCameraToMap();
+  showHudToast(debugFullMapView ? "Debug zoom: full map" : "Debug zoom: current reveal");
+}
+
+function focusCameraOnTerrainBounds(minX, maxX, minY, maxY, padding = 0) {
+  const rect = canvas.getBoundingClientRect();
+  const metrics = mapViewportMetrics(rect);
+  const paddedMinX = minX - padding;
+  const paddedMaxX = maxX + padding;
+  const paddedMinY = minY - padding;
+  const paddedMaxY = maxY + padding;
+  const worldMinX = (paddedMinX + metrics.west) * metrics.scaleX;
+  const worldMaxX = (paddedMaxX + metrics.west) * metrics.scaleX;
+  const worldMinY = (paddedMinY + metrics.north) * metrics.scaleY;
+  const worldMaxY = (paddedMaxY + metrics.north) * metrics.scaleY;
+  const spanX = Math.max(WORLD_SCALE * 0.8, worldMaxX - worldMinX);
+  const spanY = Math.max(WORLD_SCALE * 0.8, worldMaxY - worldMinY);
+  camera.zoom = Math.max(minCameraZoom(), Math.min(MAX_CAMERA_ZOOM, Math.min(rect.width / spanX, rect.height / spanY)));
+  const nextMetrics = mapViewportMetrics(rect);
+  const centerX = (worldMinX + worldMaxX) / 2;
+  const centerY = (worldMinY + worldMaxY) / 2;
+  camera.x = rect.width / 2 - nextMetrics.offsetX - centerX * camera.zoom;
+  camera.y = rect.height / 2 - nextMetrics.offsetY - centerY * camera.zoom;
   clampCamera();
 }
 
 function minCameraZoom() {
   const rect = canvas.getBoundingClientRect();
-  const metrics = mapViewportMetrics(rect);
-  return metrics.fitZoom;
+  const playable = terrainBoundsToWorldRect(cameraTerrainBounds(), rect);
+  return Math.min(rect.width / playable.width, rect.height / playable.height);
 }
 
 function zoomCameraAtScreenPoint(screenX, screenY, nextZoom, anchorWorld = null) {
@@ -1693,8 +1942,12 @@ function getStationAt(clientX, clientY) {
   const world = clientToWorld(clientX, clientY);
   const terrain = screenWorldToTerrain(world.x, world.y);
   return state.stations.find((station) => {
-    return Math.hypot(station.x - terrain.x, station.y - terrain.y) < stationHitRadius();
+    return !station.removed && Math.hypot(station.x - terrain.x, station.y - terrain.y) < stationHitRadius();
   });
+}
+
+function activeStations() {
+  return state.stations.filter((station) => !station.removed);
 }
 
 function stationHitRadius() {
@@ -1725,6 +1978,124 @@ function getRouteSegmentAt(clientX, clientY) {
           distance: projection.distance,
         };
       }
+    }
+  });
+  return closest;
+}
+
+function routeTerminalHandles() {
+  const handles = [];
+  state.lines.forEach((line) => {
+    if (line.closed) {
+      const closedHandle = closedLoopHandle(line);
+      if (closedHandle) handles.push(closedHandle);
+      return;
+    }
+    if (line.stops.length < 2) return;
+    const firstStation = state.stations[line.stops[0]];
+    const lastStation = state.stations[line.stops[line.stops.length - 1]];
+    if (!firstStation || !lastStation) return;
+
+    const firstPath = routeSegmentPath(line, 0);
+    const lastPath = routeSegmentPath(line, line.stops.length - 2);
+    const firstDirection = terminalDirectionFromPath(firstPath, true);
+    const lastDirection = terminalDirectionFromPath(lastPath, false);
+
+    if (firstDirection) {
+      handles.push(makeTerminalHandle(line, firstStation, firstDirection, {
+        insertIndex: -1,
+        anchorIndex: 0,
+      }));
+    }
+    if (lastDirection) {
+      handles.push(makeTerminalHandle(line, lastStation, lastDirection, {
+        insertIndex: line.stops.length - 1,
+        anchorIndex: line.stops.length - 1,
+      }));
+    }
+  });
+  return handles;
+}
+
+function closedLoopHandle(line) {
+  if (!line.closed || line.stops.length < 2) return null;
+  const station = state.stations[line.stops[0]];
+  const previousStation = state.stations[line.stops[line.stops.length - 1]];
+  const nextStation = state.stations[line.stops[1]];
+  if (!station || !previousStation || !nextStation) return null;
+
+  const base = stationTrackPosition(station);
+  const previous = stationTrackPosition(previousStation);
+  const next = stationTrackPosition(nextStation);
+  const tangent = normalizePoint({ x: next.x - previous.x, y: next.y - previous.y });
+  let direction = normalizePoint({ x: -tangent.y, y: tangent.x });
+  const centroid = routeCentroid(line);
+  const outward = normalizePoint({ x: base.x - centroid.x, y: base.y - centroid.y });
+  if (dotPoints(direction, outward) < 0) {
+    direction = { x: -direction.x, y: -direction.y };
+  }
+
+  return makeTerminalHandle(line, station, direction, {
+    insertIndex: 0,
+    anchorIndex: 0,
+  });
+}
+
+function routeCentroid(line) {
+  const points = line.stops
+    .map((stationId) => state.stations[stationId])
+    .filter(Boolean)
+    .map(stationTrackPosition);
+  if (!points.length) return { x: 0, y: 0 };
+  return {
+    x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
+    y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
+  };
+}
+
+function terminalDirectionFromPath(path, atStart) {
+  if (!path || path.length < 2) return null;
+  const a = atStart ? path[1] : path[path.length - 2];
+  const b = atStart ? path[0] : path[path.length - 1];
+  return normalizePoint({ x: b.x - a.x, y: b.y - a.y });
+}
+
+function makeTerminalHandle(line, station, direction, dragTarget) {
+  const base = stationTrackPosition(station);
+  const start = {
+    x: base.x + direction.x * 24,
+    y: base.y + direction.y * 24,
+  };
+  const end = {
+    x: base.x + direction.x * TERMINAL_HANDLE_LENGTH,
+    y: base.y + direction.y * TERMINAL_HANDLE_LENGTH,
+  };
+  return {
+    lineId: line.id,
+    stationId: station.id,
+    color: line.color,
+    direction,
+    start,
+    end,
+    x: end.x,
+    y: end.y,
+    distance: 0,
+    terminalHandle: true,
+    ...dragTarget,
+  };
+}
+
+function getTerminalHandleAt(clientX, clientY) {
+  const world = clientToWorld(clientX, clientY);
+  const grabRadius = TERMINAL_HANDLE_HIT_RADIUS / camera.zoom;
+  let closest = null;
+  routeTerminalHandles().forEach((handle) => {
+    const endpointDistance = Math.hypot(world.x - handle.x, world.y - handle.y);
+    const stemProjection = pointToSegmentProjection(world, handle.start, handle.end);
+    const stemDistance = stemProjection.t > 0.15 ? stemProjection.distance : Infinity;
+    const distance = Math.min(endpointDistance, stemDistance);
+    if (distance <= grabRadius && (!closest || distance < closest.hitDistance)) {
+      closest = { ...handle, distance: 0, hitDistance: distance };
     }
   });
   return closest;
@@ -1987,6 +2358,7 @@ function handleCanvasPointerDown(event) {
       event.preventDefault();
       removeStationFromLine(disconnectMenu.stationId, option.lineId);
       disconnectMenu = null;
+      showHudToast("Stop removed from line");
       return;
     }
     disconnectMenu = null;
@@ -2013,6 +2385,12 @@ function handleCanvasPointerDown(event) {
   }
 
   if (event.button !== 0) return;
+
+  if (state.removeMode) {
+    event.preventDefault();
+    handleRemoveModeTap(station);
+    return;
+  }
 
   if (state.selectedItem === "carriage") {
     const target = getTrainAt(event.clientX, event.clientY);
@@ -2062,11 +2440,12 @@ function handleCanvasPointerDown(event) {
   }
 
   const activeLine = state.lines[state.activeLine];
-  const routeTarget = station && activeLine.stops.length === 0
+  const terminalHandle = getTerminalHandleAt(event.clientX, event.clientY);
+  const routeTarget = terminalHandle || (station && activeLine.stops.length === 0
     ? { lineId: activeLine.id, startStationId: station.id, distance: 0 }
     : station
       ? getRouteEndAt(station)
-      : getBridgeSegmentAt(event.clientX, event.clientY) || getRouteSegmentAt(event.clientX, event.clientY);
+      : getBridgeSegmentAt(event.clientX, event.clientY) || getRouteSegmentAt(event.clientX, event.clientY));
   const trainPart = getTrainPartAt(event.clientX, event.clientY);
   const shouldDragTrain = trainPart && (!routeTarget || trainPart.distance + 6 < (routeTarget.distance ?? Infinity));
   if (shouldDragTrain) {
@@ -2091,11 +2470,13 @@ function handleCanvasPointerDown(event) {
   const target = routeTarget;
   if (!target) return;
 
+  event.preventDefault();
   routeDrag = {
     lineId: target.lineId,
     startStationId: target.startStationId,
     insertIndex: target.insertIndex,
     anchorIndex: target.anchorIndex,
+    fromTerminalHandle: !!target.terminalHandle,
     startWorldX: pointer.worldX,
     startWorldY: pointer.worldY,
     worldX: pointer.worldX,
@@ -2276,7 +2657,7 @@ function handleCanvasPointerUp(event) {
     renderLinePicker();
     routeChanged = true;
     finishRouteInventoryUse();
-  } else if (routeDrag.startStationId === undefined && routeDrag.insertIndex >= 0 && reshapeDistance(routeDrag) > 18) {
+  } else if (!routeDrag.fromTerminalHandle && routeDrag.startStationId === undefined && routeDrag.insertIndex >= 0 && reshapeDistance(routeDrag) > 18) {
     const reshape = getSegmentReshapePreview(line, routeDrag.insertIndex, { x: routeDrag.worldX, y: routeDrag.worldY });
     if (reshape) {
       trainPlacements = captureTrainPlacements(line);
@@ -2570,7 +2951,11 @@ function inventoryKeyForItem(item) {
 function buyInventoryItem(item) {
   const inventoryKey = inventoryKeyForItem(item);
   const price = itemPrice(item);
-  if (!inventoryKey || state.cash < price) return;
+  if (!inventoryKey) return;
+  if (state.cash < price) {
+    showHudToast("not enough funds");
+    return;
+  }
   state.cash -= price;
   state.inventory[inventoryKey] += 1;
   updateUI();
@@ -2582,9 +2967,42 @@ function toggleInventoryItem(item) {
   if (state.selectedItem === item) {
     state.selectedItem = null;
   } else if (state.inventory[inventoryKey] > 0) {
+    state.removeMode = false;
+    disconnectMenu = null;
     state.selectedItem = item;
   }
   updateUI();
+}
+
+function toggleRemoveMode() {
+  if (!state.started || state.gameOver) return;
+  state.removeMode = !state.removeMode;
+  if (state.removeMode) {
+    state.selectedItem = null;
+    routeDrag = null;
+    trainDrag = null;
+    showHudToast("Remove mode: tap a stop");
+  } else {
+    disconnectMenu = null;
+  }
+  updateUI();
+}
+
+function handleRemoveModeTap(station) {
+  if (!station) {
+    state.removeMode = false;
+    disconnectMenu = null;
+    updateUI();
+    return true;
+  }
+  const memberships = stationLineMemberships(station.id);
+  if (memberships.length) {
+    handleStationDisconnectRequest(station);
+    if (memberships.length === 1) showHudToast("Stop removed from line");
+    return true;
+  }
+  showHudToast("Station has no line to remove");
+  return true;
 }
 
 function removeStationFromRoute(station) {
@@ -2601,6 +3019,7 @@ function stationLineMemberships(stationId) {
 }
 
 function handleStationDisconnectRequest(station) {
+  if (!station || station.removed) return;
   const memberships = stationLineMemberships(station.id);
   if (!memberships.length) return;
   if (memberships.length === 1) {
@@ -2624,12 +3043,13 @@ function removeStationFromLine(stationId, lineId) {
   syncTrains(line);
   cleanupBridges();
   renderLinePicker();
+  updateUI();
 }
 
 function disconnectMenuLayout(menu = disconnectMenu) {
   if (!menu) return [];
   const station = state.stations[menu.stationId];
-  if (!station) return [];
+  if (!station || station.removed) return [];
   const center = stationPosition(station);
   const elapsed = Math.max(0, performance.now() - menu.openedAt);
   const progress = Math.min(1, elapsed / 150);
@@ -2651,9 +3071,10 @@ function getDisconnectMenuOptionAt(clientX, clientY) {
 }
 
 function spawnPassenger() {
-  if (state.stations.length < 2) return;
-  const from = randomItem(state.stations);
-  const choices = state.stations.filter((station) => station.shape !== from.shape);
+  const stations = activeStations();
+  if (stations.length < 2) return;
+  const from = randomItem(stations);
+  const choices = stations.filter((station) => station.shape !== from.shape);
   const to = randomItem(choices);
   if (!to) return;
   from.passengers.push({
@@ -2682,7 +3103,7 @@ function startPlaneArrival(airport) {
 }
 
 function airportArrivalDestinations() {
-  const shapes = state.stations
+  const shapes = activeStations()
     .filter((station) => !station.airport)
     .map((station) => station.shape)
     .filter((shape, index, array) => array.indexOf(shape) === index);
@@ -2690,7 +3111,7 @@ function airportArrivalDestinations() {
 }
 
 function portArrivalDestinations() {
-  const shapes = state.stations
+  const shapes = activeStations()
     .filter((station) => !station.port)
     .map((station) => station.shape)
     .filter((shape, index, array) => array.indexOf(shape) === index);
@@ -2699,7 +3120,7 @@ function portArrivalDestinations() {
 
 function unloadPlane(arrival) {
   const airport = state.stations[arrival.airportId];
-  if (!airport) return;
+  if (!airport || airport.removed) return;
   const destinations = airportArrivalDestinations();
   for (let index = 0; index < arrival.dropSize; index += 1) {
     airport.passengers.push({
@@ -2730,7 +3151,7 @@ function startShipArrival(port) {
 
 function unloadShip(arrival) {
   const port = state.stations[arrival.portId];
-  if (!port) return;
+  if (!port || port.removed) return;
   const destinations = portArrivalDestinations();
   for (let index = 0; index < arrival.dropSize; index += 1) {
     port.passengers.push({
@@ -2742,7 +3163,7 @@ function unloadShip(arrival) {
 
 function updateAirports(dt) {
   state.stations.forEach((station) => {
-    if (!station.airport || station.nextPlaneAt === null) return;
+    if (station.removed || !station.airport || station.nextPlaneAt === null) return;
     if (state.elapsed >= station.nextPlaneAt && !state.planeArrivals.some((arrival) => arrival.airportId === station.id)) {
       startPlaneArrival(station);
       scheduleNextPlane(station, station.nextPlaneAt);
@@ -2761,7 +3182,7 @@ function updateAirports(dt) {
 
 function updatePorts(dt) {
   state.stations.forEach((station) => {
-    if (!station.port || station.nextShipAt === null) return;
+    if (station.removed || !station.port || station.nextShipAt === null) return;
     if (state.elapsed >= station.nextShipAt && !state.shipArrivals.some((arrival) => arrival.portId === station.id)) {
       startShipArrival(station);
       scheduleNextShip(station, station.nextShipAt);
@@ -2785,39 +3206,73 @@ function maybeAddStation() {
       randomBetween(-state.map.west + 0.1, 0.9),
       randomBetween(-state.map.north + 0.14, 1 + state.map.south - 0.12)
     );
-    const tooClose = state.stations.some((station) => Math.hypot(station.x - candidate.x, station.y - candidate.y) < 0.18);
-    if (!tooClose && isLandStation(candidate.x, candidate.y)) {
+    if (canSpawnStationAt(candidate)) {
       addStation(candidate.x, candidate.y, shape);
       return;
     }
   }
-  expandMap();
-  maybeAddStation();
+
+  const fallback = findStationSpawnCandidate();
+  if (fallback) {
+    addStation(fallback.x, fallback.y, shape);
+    return;
+  }
+
+  if (expandMap()) maybeAddStation();
+}
+
+function canSpawnStationAt(candidate) {
+  return !activeStations().some((station) => Math.hypot(station.x - candidate.x, station.y - candidate.y) < 0.18) &&
+    isLandStation(candidate.x, candidate.y);
+}
+
+function findStationSpawnCandidate() {
+  const bounds = {
+    minX: -state.map.west + 0.1,
+    maxX: 0.9,
+    minY: -state.map.north + 0.14,
+    maxY: 1 + state.map.south - 0.12,
+  };
+  const candidates = [];
+  const startX = snapToGrid(bounds.minX);
+  const endX = snapToGrid(bounds.maxX);
+  const startY = snapToGrid(bounds.minY);
+  const endY = snapToGrid(bounds.maxY);
+
+  for (let y = startY; y <= endY + 1e-6; y += WATER_GRID) {
+    for (let x = startX; x <= endX + 1e-6; x += WATER_GRID) {
+      const candidate = snapTerrainPointToGrid(x, y, state.map);
+      if (
+        candidate.x < bounds.minX ||
+        candidate.x > bounds.maxX ||
+        candidate.y < bounds.minY ||
+        candidate.y > bounds.maxY
+      ) {
+        continue;
+      }
+      if (canSpawnStationAt(candidate)) candidates.push(candidate);
+    }
+  }
+
+  return candidates.length ? randomItem(candidates) : null;
 }
 
 function expandMap() {
+  if (state.revealStage >= PLAYABLE_BOUNDS_STAGES.length - 1) return false;
   const previousBounds = {
     west: state.map.west,
     north: state.map.north,
     south: state.map.south,
   };
-  const widthGrowth = mapWidth() * (MAP_EXPAND_FACTOR - 1);
-  const heightGrowth = mapHeight() * (MAP_EXPAND_FACTOR - 1);
-  state.map.west += widthGrowth;
-  state.map.north += heightGrowth / 2;
-  state.map.south += heightGrowth / 2;
-  extendInlandWaters(previousBounds);
+  state.revealStage += 1;
+  state.map = { ...PLAYABLE_BOUNDS_STAGES[state.revealStage] };
   fitCameraToMap();
   maybeAddAirport(previousBounds);
+  return true;
 }
 
 function extendInlandWaters(previousBounds) {
-  const bands = expansionBands(previousBounds).map((band) => ({
-    ...band,
-    landArea: estimateBandLandArea(band),
-  })).filter((band) => band.landArea > 0.01);
-
-  bands.forEach((band) => populateExpansionBandWater(band));
+  return previousBounds;
 }
 
 function waterBodyTouchesExpandedBand(body, previousBounds) {
@@ -2836,20 +3291,20 @@ function waterBodiesOverlapAny(body, existingBodies) {
   return existingBodies.some((other) => waterBodiesOverlap(body, other));
 }
 
-function expansionBands(previousBounds) {
+function expansionBandsBetween(previousBounds, nextBounds = state.map) {
   return [
     {
       key: "west",
-      minX: -state.map.west + 0.04,
+      minX: -nextBounds.west + 0.04,
       maxX: -previousBounds.west - 0.02,
-      minY: -state.map.north + 0.04,
-      maxY: 1 + state.map.south - 0.04,
+      minY: -nextBounds.north + 0.04,
+      maxY: 1 + nextBounds.south - 0.04,
     },
     {
       key: "north",
       minX: -previousBounds.west + 0.04,
       maxX: 0.96,
-      minY: -state.map.north + 0.04,
+      minY: -nextBounds.north + 0.04,
       maxY: -previousBounds.north - 0.02,
     },
     {
@@ -2857,9 +3312,53 @@ function expansionBands(previousBounds) {
       minX: -previousBounds.west + 0.04,
       maxX: 0.96,
       minY: 1 + previousBounds.south + 0.02,
-      maxY: 1 + state.map.south - 0.04,
+      maxY: 1 + nextBounds.south - 0.04,
     },
-  ].filter((band) => band.maxX - band.minX >= WATER_GRID && band.maxY - band.minY >= WATER_GRID);
+  ].filter((band) => band.maxX > band.minX && band.maxY > band.minY);
+}
+
+function splitBandForWaterGeneration(band, maxSpan = PREGENERATED_WATER_BAND_SPAN) {
+  const width = band.maxX - band.minX;
+  const height = band.maxY - band.minY;
+  const columns = Math.max(1, Math.ceil(width / maxSpan));
+  const rows = Math.max(1, Math.ceil(height / maxSpan));
+  if (columns === 1 && rows === 1) return [band];
+
+  const result = [];
+  for (let row = 0; row < rows; row += 1) {
+    const minY = band.minY + (height * row) / rows;
+    const maxY = band.minY + (height * (row + 1)) / rows;
+    for (let col = 0; col < columns; col += 1) {
+      const minX = band.minX + (width * col) / columns;
+      const maxX = band.minX + (width * (col + 1)) / columns;
+      result.push({
+        ...band,
+        key: `${band.key}-${col}-${row}`,
+        minX,
+        maxX,
+        minY,
+        maxY,
+      });
+    }
+  }
+  return result;
+}
+
+function populateExpansionWaterBands(terrain, previousBounds, nextBounds, blocksBody, splitLargeBands = false) {
+  const baseBands = expansionBandsBetween(previousBounds, nextBounds);
+  const candidateBands = splitLargeBands
+    ? baseBands.flatMap((band) => splitBandForWaterGeneration(band))
+    : baseBands;
+  const eligibleBands = candidateBands.map((band) => ({
+    ...band,
+    landArea: estimateBandLandArea(band, terrain),
+  })).filter((band) => {
+    return band.maxX - band.minX >= WATER_GRID &&
+      band.maxY - band.minY >= WATER_GRID &&
+      band.landArea > 0.01;
+  });
+
+  eligibleBands.forEach((band) => populateExpansionBandWaterForTerrain(terrain, band, nextBounds, blocksBody));
 }
 
 function estimateBandLandArea(band, terrain = state) {
@@ -2880,37 +3379,55 @@ function estimateBandLandArea(band, terrain = state) {
 }
 
 function isLandPointForTerrain(x, y, terrain = state) {
-  const north = terrain.map?.north || 0;
-  const south = terrain.map?.south || 0;
-  if (y < -north || y > 1 + south) return false;
+  const bounds = terrain.map || terrain.world || PREGENERATED_TERRAIN_BOUNDS;
+  const west = bounds.west || 0;
+  const north = bounds.north || 0;
+  const south = bounds.south || 0;
+  if (x < -west || x > 1 || y < -north || y > 1 + south) return false;
   if (x >= 1 - SHORE_MARGIN) return false;
   if (x >= 0 && x >= waterBoundaryAtForCoast(y, terrain.coastline) - SHORE_MARGIN) return false;
   return !terrain.waterBodies.some((body) => waterBodyContainsPoint(body, x, y, WATER_GRID * 0.08));
 }
 
-function populateExpansionBandWater(band) {
-  const targetArea = band.landArea * state.inlandWaterRatio;
-  const minimumBodies = band.landArea >= WATER_GRID * WATER_GRID * 2 ? 1 : 0;
+function populateExpansionBandWaterForTerrain(terrain, band, mapOffsets, blocksBody) {
+  const targetArea = band.landArea * terrain.inlandWaterRatio;
+  const minimumBodies = band.landArea >= WATER_GRID * WATER_GRID ? 1 : 0;
   let spawnedArea = 0;
   let spawnedBodies = 0;
 
   for (let attempt = 0; attempt < 220 && (spawnedArea < targetArea || spawnedBodies < minimumBodies); attempt += 1) {
-    const body = createWaterBodyInBand(band);
+    const body = createWaterBodyInBandForTerrain(terrain, band, mapOffsets);
     if (!body) continue;
-    if (waterBodiesOverlapAny(body, state.waterBodies)) continue;
-    if (waterBodyBlocksTransit(body)) continue;
-    state.waterBodies.push(body);
+    if (waterBodiesOverlapAny(body, terrain.waterBodies)) continue;
+    if (blocksBody(body)) continue;
+    terrain.waterBodies.push(body);
     spawnedArea += waterBodyArea(body);
     spawnedBodies += 1;
   }
+
+  if (spawnedBodies < minimumBodies) {
+    const fallback = createFallbackLakeInBandForTerrain(terrain, band, mapOffsets);
+    if (fallback && !waterBodiesOverlapAny(fallback, terrain.waterBodies) && !blocksBody(fallback)) {
+      terrain.waterBodies.push(fallback);
+    }
+  }
 }
 
-function createWaterBodyInBand(band) {
+function createWaterBodyInBandForTerrain(terrain, band, mapOffsets) {
   if (Math.random() < 0.22) {
-    const river = createRiverInBand(state.coastline, state.map, band);
+    const river = createRiverInBand(terrain.coastline, mapOffsets, band);
     if (river) return river;
   }
-  return createLakeInBand(state.coastline, state.map, band);
+  return createLakeInBand(terrain.coastline, mapOffsets, band);
+}
+
+function createFallbackLakeInBandForTerrain(terrain, band, mapOffsets) {
+  const centerX = snapToGrid((band.minX + band.maxX) / 2);
+  const centerY = snapToGrid((band.minY + band.maxY) / 2);
+  const lake = createGridLakeAt(centerX, centerY, 1, 1);
+  if (!waterBodyInsideLand(lake, terrain.coastline, mapOffsets)) return null;
+  if (!waterBodyFitsBand(lake, band)) return null;
+  return lake;
 }
 
 function createLakeInBand(coastline, mapOffsets, band) {
@@ -3005,7 +3522,7 @@ function waterBodiesOverlap(a, b) {
 }
 
 function waterBodyBlocksTransit(body) {
-  if (state.stations.some((station) => waterBodyContainsPoint(body, station.x, station.y, STATION_LAND_RADIUS + SHORE_MARGIN))) {
+  if (activeStations().some((station) => waterBodyContainsPoint(body, station.x, station.y, STATION_LAND_RADIUS + SHORE_MARGIN))) {
     return true;
   }
 
@@ -3014,7 +3531,7 @@ function waterBodyBlocksTransit(body) {
     for (let index = 0; index < segmentCount; index += 1) {
       const from = state.stations[line.stops[index]];
       const to = state.stations[line.stops[(index + 1) % line.stops.length]];
-      if (from && to && trackPathHitsWaterBody(from, to, body, state.map)) return true;
+      if (from && to && trackPathHitsWaterBody(from, to, body, worldMapBounds())) return true;
     }
     return false;
   });
@@ -3022,7 +3539,7 @@ function waterBodyBlocksTransit(body) {
 
 function maybeAddAirport(previousBounds) {
   if (state.day < state.nextAirportDay) return;
-  const existingAirports = state.stations.filter((station) => station.airport).length;
+  const existingAirports = activeStations().filter((station) => station.airport).length;
   if (existingAirports >= 4) return;
   for (let attempt = 0; attempt < 120; attempt += 1) {
     const candidate = snapTerrainPointToGrid(
@@ -3032,7 +3549,7 @@ function maybeAddAirport(previousBounds) {
     const inNewBand = candidate.x < -previousBounds.west + 0.12 ||
       candidate.y < -previousBounds.north + 0.14 ||
       candidate.y > 1 + previousBounds.south - 0.14;
-    const tooClose = state.stations.some((station) => Math.hypot(station.x - candidate.x, station.y - candidate.y) < 0.24);
+    const tooClose = activeStations().some((station) => Math.hypot(station.x - candidate.x, station.y - candidate.y) < 0.24);
     if (inNewBand && !tooClose && isLandStation(candidate.x, candidate.y)) {
       addAirport(candidate.x, candidate.y);
       scheduleNextAirportDay();
@@ -3063,14 +3580,14 @@ function scheduleNextAirportDay() {
 function maybeAddPort() {
   if (!state.coastline || state.day < state.nextPortDay || state.lastPortAttemptDay === state.day) return;
   state.lastPortAttemptDay = state.day;
-  const existingPorts = state.stations.filter((station) => station.port).length;
+  const existingPorts = activeStations().filter((station) => station.port).length;
   if (existingPorts >= 4) return;
   for (let attempt = 0; attempt < 120; attempt += 1) {
     const y = randomBetween(-state.map.north + 0.16, 1 + state.map.south - 0.14);
     const coast = waterBoundaryAt(y);
     const x = coast - randomBetween(PORT_SHORE_MIN, PORT_SHORE_MAX);
     const candidate = snapTerrainPointToGrid(x, y);
-    const tooClose = state.stations.some((station) => Math.hypot(station.x - candidate.x, station.y - candidate.y) < 0.26);
+    const tooClose = activeStations().some((station) => Math.hypot(station.x - candidate.x, station.y - candidate.y) < 0.26);
     const coastalEnough = isCoastalPortCandidate(candidate.x, candidate.y);
     if (coastalEnough && !tooClose && isPortStation(candidate.x, candidate.y)) {
       addPort(candidate.x, candidate.y);
@@ -3105,7 +3622,7 @@ function findPortSpawnCandidate() {
     const coast = waterBoundaryAt(y);
     for (let offset = PORT_SHORE_MIN; offset <= PORT_SHORE_MAX; offset += WATER_GRID / 2) {
       const candidate = snapTerrainPointToGrid(coast - offset, y);
-      const tooClose = state.stations.some((station) => Math.hypot(station.x - candidate.x, station.y - candidate.y) < 0.26);
+      const tooClose = activeStations().some((station) => Math.hypot(station.x - candidate.x, station.y - candidate.y) < 0.26);
       if (tooClose || !isPortStation(candidate.x, candidate.y) || !isCoastalPortCandidate(candidate.x, candidate.y)) continue;
       candidates.push(candidate);
     }
@@ -3129,7 +3646,7 @@ function findAirportSpawnInExpandedBand(previousBounds) {
         candidate.y < -previousBounds.north + 0.14 ||
         candidate.y > 1 + previousBounds.south - 0.14;
       if (!inNewBand) continue;
-      const tooClose = state.stations.some((station) => Math.hypot(station.x - candidate.x, station.y - candidate.y) < 0.24);
+      const tooClose = activeStations().some((station) => Math.hypot(station.x - candidate.x, station.y - candidate.y) < 0.24);
       if (tooClose || !isLandStation(candidate.x, candidate.y)) continue;
       candidates.push(candidate);
     }
@@ -3146,12 +3663,17 @@ function isPortStation(x, y) {
 }
 
 function isLandStationForTerrain(x, y, terrain) {
+  const bounds = terrain.map || terrain.world || PREGENERATED_TERRAIN_BOUNDS;
+  const west = bounds.west || 0;
+  const north = bounds.north || 0;
+  const south = bounds.south || 0;
   const sampleYs = [y - STATION_LAND_RADIUS, y, y + STATION_LAND_RADIUS];
   return sampleYs.every((sampleY) => {
+    if (x - STATION_LAND_RADIUS < -west) return false;
+    if (sampleY < -north || sampleY > 1 + south) return false;
     if (x + STATION_LAND_RADIUS >= 1 - SHORE_MARGIN) return false;
-    if (x < 0) return true;
-    return x + STATION_LAND_RADIUS < waterBoundaryAtForCoast(sampleY, terrain.coastline) - SHORE_MARGIN &&
-      !terrain.waterBodies.some((body) => waterBodyContainsPoint(body, x, sampleY, STATION_LAND_RADIUS + SHORE_MARGIN));
+    if (x >= 0 && x + STATION_LAND_RADIUS >= waterBoundaryAtForCoast(sampleY, terrain.coastline) - SHORE_MARGIN) return false;
+    return !terrain.waterBodies.some((body) => waterBodyContainsPoint(body, x, sampleY, STATION_LAND_RADIUS + SHORE_MARGIN));
   });
 }
 
@@ -3171,7 +3693,7 @@ function routeSegmentHitsWater(aStation, bStation) {
   return routeSegmentHitsWaterForTerrain(aStation.x, aStation.y, bStation.x, bStation.y, state);
 }
 
-function routeSegmentHitsWaterForTerrain(x1, y1, x2, y2, terrain, mapOffsets = state?.map || { west: 0, north: 0, south: 0 }) {
+function routeSegmentHitsWaterForTerrain(x1, y1, x2, y2, terrain, mapOffsets = worldMapBounds()) {
   const path = trackPathBetweenTerrainPoints({ x: x1, y: y1 }, { x: x2, y: y2 }, mapOffsets);
   for (let index = 0; index < path.length - 1; index += 1) {
     if (routeSegmentWaterKind(path[index].x, path[index].y, path[index + 1].x, path[index + 1].y, terrain) !== "none") {
@@ -3197,7 +3719,7 @@ function routeSegmentWaterKind(x1, y1, x2, y2, terrain) {
   return hitsInland ? "inland" : "none";
 }
 
-function trackPathHitsWaterBody(a, b, body, mapOffsets = state?.map || { west: 0, north: 0, south: 0 }) {
+function trackPathHitsWaterBody(a, b, body, mapOffsets = worldMapBounds()) {
   const path = trackPathBetweenTerrainPoints(a, b, mapOffsets);
   for (let index = 0; index < path.length - 1; index += 1) {
     if (segmentIntersectsWaterBody(path[index], path[index + 1], body, ROUTE_WATER_CLEARANCE)) return true;
@@ -3538,19 +4060,21 @@ function showResults() {
 function draw() {
   const rect = canvas.getBoundingClientRect();
   const metrics = mapViewportMetrics(rect);
+  const playableRect = terrainBoundsToWorldRect(cameraTerrainBounds(), rect, worldMapBounds());
   ctx.clearRect(0, 0, rect.width, rect.height);
   ctx.fillStyle = "#e6dcc7";
   ctx.fillRect(0, 0, rect.width, rect.height);
-  drawViewportWaterGutter(rect, metrics);
   ctx.save();
   ctx.translate(metrics.offsetX + camera.x, metrics.offsetY + camera.y);
   ctx.scale(camera.zoom, camera.zoom);
   drawWater(rect);
   drawLines();
+  drawTerminalHandles();
   drawSharpTurnWarnings();
   drawBridges();
   drawRouteDrag();
   ctx.restore();
+  drawPlayableAreaMask(rect, metrics, playableRect, false);
   drawNightMapShade(rect);
   ctx.save();
   ctx.translate(metrics.offsetX + camera.x, metrics.offsetY + camera.y);
@@ -3561,15 +4085,198 @@ function draw() {
   drawTrains();
   drawDisconnectMenu();
   ctx.restore();
+  drawPlayableAreaMask(rect, metrics, playableRect, true);
   if (state.paused && !state.selectedItem) drawOverlay(rect);
 }
 
-function drawViewportWaterGutter(rect, metrics) {
-  if (!state.coastline) return;
-  const gutterStart = metrics.offsetX + camera.x + metrics.scaledWorldWidth;
-  if (gutterStart >= rect.width) return;
-  ctx.fillStyle = SEA_COLOR;
-  ctx.fillRect(gutterStart, 0, rect.width - gutterStart, rect.height);
+function drawPlayableAreaMask(rect, metrics, playableRect, includeFog = true) {
+  const left = metrics.offsetX + camera.x + playableRect.left * camera.zoom;
+  const top = metrics.offsetY + camera.y + playableRect.top * camera.zoom;
+  const right = metrics.offsetX + camera.x + playableRect.right * camera.zoom;
+  const bottom = metrics.offsetY + camera.y + playableRect.bottom * camera.zoom;
+
+  ctx.fillStyle = includeFog ? colorWithNightTint("#e6dcc7") : "#e6dcc7";
+  if (top > 0) ctx.fillRect(0, 0, rect.width, top);
+  if (left > 0) ctx.fillRect(0, 0, left, rect.height);
+  if (bottom < rect.height) ctx.fillRect(0, bottom, rect.width, rect.height - bottom);
+
+  if (right < rect.width) {
+    ctx.fillStyle = includeFog
+      ? colorWithNightTint(state.coastline ? SEA_COLOR : "#e6dcc7")
+      : state.coastline ? SEA_COLOR : "#e6dcc7";
+    ctx.fillRect(right, 0, rect.width - right, rect.height);
+  }
+
+  if (includeFog) drawRevealFog(rect, { left, top, right, bottom });
+}
+
+function drawRevealFog(rect, bounds) {
+  if (debugFullMapView) return;
+  const left = Math.max(0, Math.min(rect.width, bounds.left));
+  const top = Math.max(0, Math.min(rect.height, bounds.top));
+  const right = Math.max(0, Math.min(rect.width, bounds.right));
+  const bottom = Math.max(0, Math.min(rect.height, bounds.bottom));
+  const feather = 96;
+  const cornerAlpha = 0.7;
+  const width = Math.max(0, right - left);
+  const height = Math.max(0, bottom - top);
+  if (width <= 0 || height <= 0) return;
+
+  fillCoastAwareFogRect(0, 0, rect.width, top, rect);
+  fillCoastAwareFogRect(0, top, left, height, rect);
+  fillCoastAwareFogRect(right, top, rect.width - right, height, rect);
+  fillCoastAwareFogRect(0, bottom, rect.width, rect.height - bottom, rect);
+
+  if (width > feather) {
+    drawHorizontalRevealFog(left, top, Math.min(feather, width), height, "left", rect);
+  }
+
+  if (width > feather) {
+    const edgeWidth = Math.min(feather, width);
+    drawHorizontalRevealFog(right - edgeWidth, top, edgeWidth, height, "right", rect);
+  }
+
+  if (height > feather) {
+    drawVerticalRevealFog(left, top, width, Math.min(feather, height), "top", rect);
+  }
+
+  if (height > feather) {
+    const edgeHeight = Math.min(feather, height);
+    drawVerticalRevealFog(left, bottom - edgeHeight, width, edgeHeight, "bottom", rect);
+  }
+
+  const radius = Math.min(feather * 1.25, width / 2, height / 2);
+  drawRevealCornerFog(left, top, radius, cornerAlpha, revealFogRgbStringForScreenPoint(left, top, rect));
+  drawRevealCornerFog(right, top, radius, cornerAlpha, revealFogRgbStringForScreenPoint(right, top, rect));
+  drawRevealCornerFog(left, bottom, radius, cornerAlpha, revealFogRgbStringForScreenPoint(left, bottom, rect));
+  drawRevealCornerFog(right, bottom, radius, cornerAlpha, revealFogRgbStringForScreenPoint(right, bottom, rect));
+}
+
+function drawRevealCornerFog(x, y, radius, alpha, fogRgb = "201, 191, 172") {
+  if (radius <= 0) return;
+  const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+  gradient.addColorStop(0, `rgba(${fogRgb}, ${alpha})`);
+  gradient.addColorStop(1, `rgba(${fogRgb}, 0)`);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+}
+
+function fillCoastAwareFogRect(x, y, width, height, rect) {
+  if (width <= 0 || height <= 0) return;
+  const stripHeight = 18;
+  for (let yy = y; yy < y + height; yy += stripHeight) {
+    const h = Math.min(stripHeight, y + height - yy);
+    ctx.fillStyle = createCoastAwareFogFill(x, width, yy + h / 2, rect);
+    ctx.fillRect(x, yy, width, h);
+  }
+}
+
+function drawHorizontalRevealFog(x, y, width, height, side, rect) {
+  if (width <= 0 || height <= 0) return;
+  const stripHeight = 14;
+  for (let yy = y; yy < y + height; yy += stripHeight) {
+    const h = Math.min(stripHeight, y + height - yy);
+    const sampleX = side === "left" ? x : x + width;
+    const fogRgb = revealFogRgbStringForScreenPoint(sampleX, yy + h / 2, rect);
+    const gradient = ctx.createLinearGradient(x, 0, x + width, 0);
+    if (side === "left") {
+      gradient.addColorStop(0, `rgba(${fogRgb}, 1)`);
+      gradient.addColorStop(1, `rgba(${fogRgb}, 0)`);
+    } else {
+      gradient.addColorStop(0, `rgba(${fogRgb}, 0)`);
+      gradient.addColorStop(1, `rgba(${fogRgb}, 1)`);
+    }
+    ctx.fillStyle = gradient;
+    ctx.fillRect(x, yy, width, h);
+  }
+}
+
+function drawVerticalRevealFog(x, y, width, height, side, rect) {
+  if (width <= 0 || height <= 0) return;
+  const stripWidth = 14;
+  for (let xx = x; xx < x + width; xx += stripWidth) {
+    const w = Math.min(stripWidth, x + width - xx);
+    const sampleY = side === "top" ? y : y + height;
+    const fogRgb = revealFogRgbStringForScreenPoint(xx + w / 2, sampleY, rect);
+    const gradient = ctx.createLinearGradient(0, y, 0, y + height);
+    if (side === "top") {
+      gradient.addColorStop(0, `rgba(${fogRgb}, 1)`);
+      gradient.addColorStop(1, `rgba(${fogRgb}, 0)`);
+    } else {
+      gradient.addColorStop(0, `rgba(${fogRgb}, 0)`);
+      gradient.addColorStop(1, `rgba(${fogRgb}, 1)`);
+    }
+    ctx.fillStyle = gradient;
+    ctx.fillRect(xx, y, w, height);
+  }
+}
+
+function createCoastAwareFogFill(x, width, screenY, rect) {
+  if (!state.coastline || width <= 1) return `rgba(${revealFogRgbStringForBase(LAND_FOG_RGB)}, 1)`;
+  const coastX = screenCoastXAtScreenY(screenY, rect);
+  if (coastX === null) return `rgba(${revealFogRgbStringForBase(LAND_FOG_RGB)}, 1)`;
+  const transition = 130;
+  if (x + width <= coastX - transition / 2) return `rgba(${revealFogRgbStringForBase(LAND_FOG_RGB)}, 1)`;
+  if (x >= coastX + transition / 2) return `rgba(${revealFogRgbStringForBase(OCEAN_FOG_RGB)}, 1)`;
+
+  const gradient = ctx.createLinearGradient(x, 0, x + width, 0);
+  const start = Math.max(0, Math.min(1, (coastX - transition / 2 - x) / width));
+  const end = Math.max(0, Math.min(1, (coastX + transition / 2 - x) / width));
+  gradient.addColorStop(0, `rgba(${revealFogRgbStringForScreenPoint(x, screenY, rect)}, 1)`);
+  if (start > 0) gradient.addColorStop(start, `rgba(${revealFogRgbStringForBase(LAND_FOG_RGB)}, 1)`);
+  if (end > start) {
+    gradient.addColorStop(start, `rgba(${revealFogRgbStringForBase(LAND_FOG_RGB)}, 1)`);
+    gradient.addColorStop(end, `rgba(${revealFogRgbStringForBase(OCEAN_FOG_RGB)}, 1)`);
+  }
+  if (end < 1) gradient.addColorStop(end, `rgba(${revealFogRgbStringForBase(OCEAN_FOG_RGB)}, 1)`);
+  gradient.addColorStop(1, `rgba(${revealFogRgbStringForScreenPoint(x + width, screenY, rect)}, 1)`);
+  return gradient;
+}
+
+function revealFogRgbStringForScreenPoint(screenX, screenY, rect) {
+  const dayRgb = revealFogDayRgbForScreenPoint(screenX, screenY, rect);
+  return revealFogRgbStringForBase(dayRgb);
+}
+
+function revealFogDayRgbForScreenPoint(screenX, screenY, rect) {
+  if (!state.coastline) return LAND_FOG_RGB;
+  const coastX = screenCoastXAtScreenY(screenY, rect);
+  if (coastX === null) return LAND_FOG_RGB;
+  const transition = 130;
+  const t = smoothStep(Math.max(0, Math.min(1, (screenX - (coastX - transition / 2)) / transition)));
+  return mixRgb(LAND_FOG_RGB, OCEAN_FOG_RGB, t);
+}
+
+function screenCoastXAtScreenY(screenY, rect) {
+  if (!state.coastline) return null;
+  const metrics = mapViewportMetrics(rect);
+  const worldY = (screenY - metrics.offsetY - camera.y) / camera.zoom;
+  const terrainY = worldPointToTerrainForOffsets({ x: 0, y: worldY }, worldMapBounds(), rect).y;
+  const coastTerrainX = waterBoundaryAtForCoast(terrainY, state.coastline);
+  const coastWorld = terrainPointToWorld(coastTerrainX, terrainY, rect);
+  return metrics.offsetX + camera.x + coastWorld.x * camera.zoom;
+}
+
+function revealFogRgbStringForBase(dayFog) {
+  const night = nightIntensity();
+  const nightFog = { r: 58, g: 62, b: 66 };
+  const t = Math.min(1, night * 1.15);
+  const r = Math.round(dayFog.r * (1 - t) + nightFog.r * t);
+  const g = Math.round(dayFog.g * (1 - t) + nightFog.g * t);
+  const b = Math.round(dayFog.b * (1 - t) + nightFog.b * t);
+  return `${r}, ${g}, ${b}`;
+}
+
+function mixRgb(a, b, t) {
+  return {
+    r: Math.round(a.r * (1 - t) + b.r * t),
+    g: Math.round(a.g * (1 - t) + b.g * t),
+    b: Math.round(a.b * (1 - t) + b.b * t),
+  };
+}
+
+function smoothStep(t) {
+  return t * t * (3 - 2 * t);
 }
 
 function drawWater(rect) {
@@ -3578,8 +4285,9 @@ function drawWater(rect) {
   ctx.fillStyle = "#e6dcc7";
   ctx.fillRect(0, 0, metrics.worldWidth, metrics.worldHeight);
   if (coast) {
-    const topY = -state.map.north;
-    const bottomY = 1 + state.map.south;
+    const world = worldMapBounds();
+    const topY = -world.north;
+    const bottomY = 1 + world.south;
     const extendedTop = terrainPointToWorld(coast.startX, topY, rect);
     const start = terrainPointToWorld(coast.startX, 0, rect);
     const control1 = terrainPointToWorld(coast.control1X, coast.control1Y, rect);
@@ -3614,8 +4322,38 @@ function drawWater(rect) {
 function drawNightMapShade(rect) {
   const intensity = nightIntensity();
   if (intensity <= 0) return;
-  ctx.fillStyle = `rgba(20, 28, 44, ${MAX_NIGHT_DIM * intensity})`;
+  ctx.fillStyle = `rgba(${NIGHT_SHADE_RGB.r}, ${NIGHT_SHADE_RGB.g}, ${NIGHT_SHADE_RGB.b}, ${nightShadeAlpha()})`;
   ctx.fillRect(0, 0, rect.width, rect.height);
+}
+
+function nightShadeAlpha() {
+  return MAX_NIGHT_DIM * nightIntensity();
+}
+
+function colorWithNightTint(color) {
+  const rgb = parseHexColor(color);
+  if (!rgb) return color;
+  return `rgb(${nightTintedRgbString(rgb)})`;
+}
+
+function nightTintedRgbString(rgb) {
+  const alpha = nightShadeAlpha();
+  if (alpha <= 0) return `${rgb.r}, ${rgb.g}, ${rgb.b}`;
+  const r = Math.round(rgb.r * (1 - alpha) + NIGHT_SHADE_RGB.r * alpha);
+  const g = Math.round(rgb.g * (1 - alpha) + NIGHT_SHADE_RGB.g * alpha);
+  const b = Math.round(rgb.b * (1 - alpha) + NIGHT_SHADE_RGB.b * alpha);
+  return `${r}, ${g}, ${b}`;
+}
+
+function parseHexColor(color) {
+  const match = /^#([0-9a-f]{6})$/i.exec(color);
+  if (!match) return null;
+  const value = Number.parseInt(match[1], 16);
+  return {
+    r: (value >> 16) & 255,
+    g: (value >> 8) & 255,
+    b: value & 255,
+  };
 }
 
 function drawInlandWaterCells(rect) {
@@ -3778,10 +4516,10 @@ function cellKey(col, row) {
 }
 
 function terrainPointToWorld(x, y, rect) {
-  return terrainPointToWorldForOffsets(x, y, state?.map || { west: 0, north: 0, south: 0 }, rect);
+  return terrainPointToWorldForOffsets(x, y, worldMapBounds(), rect);
 }
 
-function terrainPointToWorldForOffsets(x, y, mapOffsets = state?.map || { west: 0, north: 0, south: 0 }, rect = canvas.getBoundingClientRect()) {
+function terrainPointToWorldForOffsets(x, y, mapOffsets = worldMapBounds(), rect = canvas.getBoundingClientRect()) {
   const metrics = mapViewportMetrics(rect, mapOffsets);
   return {
     x: (x + metrics.west) * metrics.scaleX,
@@ -3789,7 +4527,7 @@ function terrainPointToWorldForOffsets(x, y, mapOffsets = state?.map || { west: 
   };
 }
 
-function worldPointToTerrainForOffsets(point, mapOffsets = state?.map || { west: 0, north: 0, south: 0 }, rect = canvas.getBoundingClientRect()) {
+function worldPointToTerrainForOffsets(point, mapOffsets = worldMapBounds(), rect = canvas.getBoundingClientRect()) {
   const metrics = mapViewportMetrics(rect, mapOffsets);
   return {
     x: point.x / metrics.scaleX - metrics.west,
@@ -3814,7 +4552,7 @@ function portBerthGeometry(port, rect = canvas.getBoundingClientRect()) {
   };
 }
 
-function snapTerrainPointToGrid(x, y, mapOffsets = state?.map || { west: 0, north: 0, south: 0 }) {
+function snapTerrainPointToGrid(x, y, mapOffsets = worldMapBounds()) {
   const west = mapOffsets.west || 0;
   const north = mapOffsets.north || 0;
   const south = mapOffsets.south || 0;
@@ -3848,6 +4586,35 @@ function drawLines() {
     ctx.strokeStyle = "rgba(255,255,255,0.65)";
     ctx.lineWidth = 3;
     strokeLinePath(line);
+  });
+}
+
+function drawTerminalHandles() {
+  routeTerminalHandles().forEach((handle) => {
+    const perpendicular = { x: -handle.direction.y, y: handle.direction.x };
+    const capHalf = TERMINAL_HANDLE_SIZE / 2;
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    ctx.strokeStyle = "#fff8e8";
+    ctx.lineWidth = 11;
+    ctx.beginPath();
+    ctx.moveTo(handle.start.x, handle.start.y);
+    ctx.lineTo(handle.end.x, handle.end.y);
+    ctx.moveTo(handle.end.x - perpendicular.x * capHalf, handle.end.y - perpendicular.y * capHalf);
+    ctx.lineTo(handle.end.x + perpendicular.x * capHalf, handle.end.y + perpendicular.y * capHalf);
+    ctx.stroke();
+
+    ctx.strokeStyle = handle.color;
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(handle.start.x, handle.start.y);
+    ctx.lineTo(handle.end.x, handle.end.y);
+    ctx.moveTo(handle.end.x - perpendicular.x * capHalf, handle.end.y - perpendicular.y * capHalf);
+    ctx.lineTo(handle.end.x + perpendicular.x * capHalf, handle.end.y + perpendicular.y * capHalf);
+    ctx.stroke();
+    ctx.restore();
   });
 }
 
@@ -4061,7 +4828,7 @@ function drawRouteDrag() {
   const line = state.lines[routeDrag.lineId];
   if (!line) return;
 
-  if (routeDrag.startStationId === undefined && routeDrag.insertIndex >= 0 && routeDrag.stationId === null) {
+  if (!routeDrag.fromTerminalHandle && routeDrag.startStationId === undefined && routeDrag.insertIndex >= 0 && routeDrag.stationId === null) {
     const reshape = getSegmentReshapePreview(line, routeDrag.insertIndex, { x: routeDrag.worldX, y: routeDrag.worldY });
     if (reshape && reshapeDistance(routeDrag) > 18) {
       ctx.save();
@@ -4091,6 +4858,7 @@ function drawRouteDrag() {
     ? stationPosition(state.stations[line.stops[(routeDrag.insertIndex + 1) % line.stops.length]])
     : null;
   const targetStation = state.stations.find((station) => {
+    if (station.removed) return false;
     if (station.id !== routeDrag.stationId) return false;
     return station.id !== routeDrag.startStationId && (!line.stops.includes(station.id) || (
       !line.closed &&
@@ -4123,6 +4891,7 @@ function drawStations() {
   const activeStops = new Set(state.lines[state.activeLine].stops);
   const lightNight = nightLightIntensity();
   state.stations.forEach((station) => {
+    if (station.removed) return;
     const p = stationPosition(station);
     if (station.airport) drawAirportScenario(p.x, p.y);
     if (station.port) drawPortScenario(p.x, p.y, station);
@@ -4270,7 +5039,7 @@ function drawPlanes() {
   const lightNight = nightLightIntensity();
   state.planeArrivals.forEach((arrival) => {
     const airport = state.stations[arrival.airportId];
-    if (!airport) return;
+    if (!airport || airport.removed) return;
     const airportPoint = stationPosition(airport);
     const t = Math.max(0, Math.min(1, arrival.progress));
     const eased = 1 - Math.pow(1 - t, 2);
@@ -4290,7 +5059,7 @@ function drawShips() {
   const lightNight = nightLightIntensity();
   state.shipArrivals.forEach((arrival) => {
     const port = state.stations[arrival.portId];
-    if (!port) return;
+    if (!port || port.removed) return;
     const berth = portBerthGeometry(port);
     const t = Math.max(0, Math.min(1, arrival.progress));
     const eased = 1 - Math.pow(1 - t, 2);
@@ -4841,7 +5610,7 @@ function randomBetween(min, max) {
 }
 
 function snapToGrid(value) {
-  return Math.max(0, Math.min(1 - WATER_GRID, Math.round(value / WATER_GRID) * WATER_GRID));
+  return Math.round(value / WATER_GRID) * WATER_GRID;
 }
 
 function loop(now) {
@@ -4863,6 +5632,12 @@ ui.pauseBtn.addEventListener("click", () => {
     updateUI();
     return;
   }
+  if (state.removeMode) {
+    state.removeMode = false;
+    disconnectMenu = null;
+    updateUI();
+    return;
+  }
   state.paused = !state.paused;
   syncMusicPlayback();
   updateButtons();
@@ -4873,6 +5648,7 @@ ui.musicToggleBtn?.addEventListener("click", () => {
   syncMusicPlayback();
 });
 ui.shopBtn?.addEventListener("click", openShop);
+ui.removeBtn?.addEventListener("click", toggleRemoveMode);
 ui.closeShopBtn?.addEventListener("click", closeShop);
 ui.buyBridgeBtn.addEventListener("click", () => buyInventoryItem("bridge"));
 ui.buyCarriageBtn.addEventListener("click", () => buyInventoryItem("carriage"));
@@ -4899,6 +5675,13 @@ window.addEventListener("keydown", (event) => {
     closeShop();
     return;
   }
+  if (event.key === "Escape" && state.removeMode) {
+    event.preventDefault();
+    state.removeMode = false;
+    disconnectMenu = null;
+    updateUI();
+    return;
+  }
   if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
   const tagName = document.activeElement?.tagName;
   if (tagName === "INPUT" || tagName === "TEXTAREA" || document.activeElement?.isContentEditable) return;
@@ -4909,6 +5692,10 @@ window.addEventListener("keydown", (event) => {
     toggleInventoryItem("line");
   } else if (key === "c") {
     toggleInventoryItem("carriage");
+  } else if (key === "d") {
+    toggleRemoveMode();
+  } else if (key === "z") {
+    toggleDebugFullMapView();
   } else {
     return;
   }
