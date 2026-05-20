@@ -1,8 +1,10 @@
 # Tiny Transit Leaderboard Setup
 
-This game now supports an online leaderboard through Supabase.
+This game uses Supabase for a public leaderboard. Scores are submitted through
+a Supabase Edge Function so anonymous visitors cannot insert rows directly into
+the database table.
 
-## 1. Create a table
+## 1. Lock down the table
 
 Run this SQL in the Supabase SQL editor:
 
@@ -19,28 +21,44 @@ create table if not exists public.leaderboard_entries (
 
 alter table public.leaderboard_entries enable row level security;
 
+drop policy if exists "leaderboard read" on public.leaderboard_entries;
 create policy "leaderboard read"
 on public.leaderboard_entries
 for select
 to anon
 using (true);
 
-create policy "leaderboard insert"
-on public.leaderboard_entries
-for insert
-to anon
-with check (
-  char_length(player_name) between 1 and 24
-  and score >= 0
-  and passengers >= 0
-  and revenue >= 0
-  and days_operated >= 0
+drop policy if exists "leaderboard insert" on public.leaderboard_entries;
+
+create table if not exists public.leaderboard_submission_limits (
+  submitter_key text primary key,
+  last_submitted_at timestamptz not null default now()
 );
+
+alter table public.leaderboard_submission_limits enable row level security;
 ```
 
-## 2. Add your project keys
+The important part is `drop policy if exists "leaderboard insert"`. The browser
+can still read the top scores, but it cannot insert rows directly anymore.
 
-Edit [supabase-config.js](C:\Users\renat\Documents\TinyTraffic\supabase-config.js):
+## 2. Deploy the Edge Function
+
+Install and log in to the Supabase CLI if needed, then run this from the project
+folder:
+
+```bash
+supabase login
+supabase link --project-ref raxvamuljvftpokziwmg
+supabase functions deploy submit-score
+```
+
+The function in `supabase/functions/submit-score/index.ts` validates every score,
+rate-limits repeated submissions from the same IP/browser, and inserts with the
+private service role key inside Supabase. It does not enforce maximum score caps.
+
+## 3. Keep the browser config public-only
+
+`supabase-config.js` should only contain the project URL and anon/publishable key:
 
 ```js
 window.SUPABASE_CONFIG = {
@@ -49,13 +67,13 @@ window.SUPABASE_CONFIG = {
 };
 ```
 
-Use the project URL and publishable/anon key from your Supabase dashboard.
+Never put the service role key in this file or anywhere in browser code.
 
-## 3. Reload the game
+## 4. Reload the game
 
 If the setup is correct:
 
 - the start modal leaderboard status will switch from `Offline` to `Live`
 - players can enter a name before starting
-- scores post automatically on gridlock
-- the results modal and start modal both show the live top scores
+- scores post through `/functions/v1/submit-score` on gridlock
+- direct inserts into `leaderboard_entries` from the public anon key will fail

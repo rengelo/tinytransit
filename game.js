@@ -142,6 +142,7 @@ const NIGHT_START_PROGRESS = 0.617;
 const MAX_NIGHT_DIM = 0.575;
 const NIGHT_SHADE_RGB = { r: 20, g: 28, b: 44 };
 const LEADERBOARD_TABLE = "leaderboard_entries";
+const LEADERBOARD_SUBMIT_FUNCTION = "submit-score";
 const LEADERBOARD_LIMIT = 10;
 const PLAYER_NAME_MAX = 24;
 const PLAYER_NAME_STORAGE_KEY = "tinytransit.playerName";
@@ -1078,6 +1079,8 @@ async function refreshLeaderboard() {
 
 async function submitLeaderboardScore() {
   if (!leaderboardReady || !supabaseClient || state.scoreSubmitted || !state.playerName) return false;
+  const config = window.SUPABASE_CONFIG || {};
+  if (!config.url || !config.anonKey) return false;
   state.scoreSubmitted = true;
   if (ui.resultsLeaderboardStatus) ui.resultsLeaderboardStatus.textContent = "Posting...";
   const payload = {
@@ -1087,13 +1090,22 @@ async function submitLeaderboardScore() {
     revenue: state.cash,
     days_operated: state.day,
   };
-  const { error } = await supabaseClient
-    .from(LEADERBOARD_TABLE)
-    .insert(payload);
 
-  if (error) {
+  const response = await fetch(`${config.url}/functions/v1/${LEADERBOARD_SUBMIT_FUNCTION}`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${config.anonKey}`,
+      "apikey": config.anonKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
     state.scoreSubmitted = false;
-    if (ui.resultsLeaderboardStatus) ui.resultsLeaderboardStatus.textContent = "Offline";
+    if (ui.resultsLeaderboardStatus) {
+      ui.resultsLeaderboardStatus.textContent = response.status === 429 ? "Slow down" : "Offline";
+    }
     return false;
   }
 
