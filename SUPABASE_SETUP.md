@@ -55,6 +55,9 @@ supabase functions deploy submit-score
 The function in `supabase/functions/submit-score/index.ts` validates every score,
 rate-limits repeated submissions from the same IP/browser, and inserts with the
 private service role key inside Supabase. It does not enforce maximum score caps.
+The `supabase/config.toml` file disables Supabase's built-in JWT check for this
+function because the site uses a public publishable key and the function does its
+own validation and rate limiting.
 
 ## 3. Keep the browser config public-only
 
